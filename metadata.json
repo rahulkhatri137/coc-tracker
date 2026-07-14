@@ -1,0 +1,6 @@
+{
+  "name": "Clash Tracker",
+  "description": "Track Clash of Clans upgrades across multiple accounts, estimate completion times, and receive notifications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
