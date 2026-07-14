@@ -22,52 +22,85 @@ object JsonParser {
         // Load mappings from mapping.json
         val mapping = loadMapping(assetManager)
 
-        // Find all JSON objects inside the string using depth matching.
-        // This is extremely robust: it bypasses any malformed brackets, missing commas, or 
-        // leading/trailing text, and can process very long inputs (well over 2000 characters).
-        val objects = findJsonObjects(trimmed)
-        for (jsonObjStr in objects) {
-            try {
-                val obj = JSONObject(jsonObjStr)
-                
-                // Extract "data" (the building code)
-                val dataVal = if (obj.has("data")) {
-                    obj.get("data").toString()
-                } else {
-                    ""
-                }
-                
-                // Extract "timer" (remaining seconds). 
-                // We ONLY go for items that actually have a timer key and where timer > 0.
-                if (obj.has("timer")) {
-                    val timerSeconds = obj.optLong("timer", -1L)
-                    if (timerSeconds > 0 && dataVal.isNotEmpty()) {
-                        val timeLeftStr = formatSecondsToDuration(timerSeconds)
-                        
-                        // Map structure name using mapping.json
-                        val mappedName = mapping[dataVal]
-                        val friendlyName = if (mappedName != null && mappedName.isNotBlank()) {
-                            mappedName.replace("_", " ")
-                        } else if (mappedName != null && mappedName.isBlank()) {
-                            "Building $dataVal"
-                        } else {
-                            dataVal
-                        }
-
-                        list.add(
-                            ExtractedUpgrade(
-                                structureName = friendlyName,
-                                targetLevel = null, // ignore lvl values as requested by user
-                                timeLeftString = timeLeftStr
-                            )
-                        )
+        try {
+            if (trimmed.startsWith("[")) {
+                val array = JSONArray(trimmed)
+                extractFromArr(array, mapping, list)
+            } else if (trimmed.startsWith("{")) {
+                val obj = JSONObject(trimmed)
+                extractFromObj(obj, mapping, list)
+            } else {
+                // Try searching for JSON objects via brace-matching if it starts with arbitrary fields or text
+                val objects = findJsonObjects(trimmed)
+                for (jsonObjStr in objects) {
+                    try {
+                        val obj = JSONObject(jsonObjStr)
+                        extractFromObj(obj, mapping, list)
+                    } catch (e: Exception) {
+                        // ignore
                     }
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed parsing an individual JSON object block: $jsonObjStr", e)
+            }
+        } catch (e: Exception) {
+            // Fallback: brace matching
+            val objects = findJsonObjects(trimmed)
+            for (jsonObjStr in objects) {
+                try {
+                    val obj = JSONObject(jsonObjStr)
+                    extractFromObj(obj, mapping, list)
+                } catch (ex: Exception) {
+                    // ignore
+                }
             }
         }
         return list
+    }
+
+    private fun extractFromObj(obj: JSONObject, mapping: Map<String, String>, list: MutableList<ExtractedUpgrade>) {
+        if (obj.has("data") && obj.has("timer")) {
+            val dataVal = obj.get("data").toString()
+            val timerSeconds = obj.optLong("timer", -1L)
+            if (timerSeconds > 0 && dataVal.isNotEmpty()) {
+                val timeLeftStr = formatSecondsToDuration(timerSeconds)
+                val mappedName = mapping[dataVal]
+                val friendlyName = if (mappedName != null && mappedName.isNotBlank()) {
+                    mappedName.replace("_", " ")
+                } else if (mappedName != null && mappedName.isBlank()) {
+                    "Building $dataVal"
+                } else {
+                    dataVal
+                }
+                list.add(
+                    ExtractedUpgrade(
+                        structureName = friendlyName,
+                        targetLevel = null, // ignore lvl values as requested by user
+                        timeLeftString = timeLeftStr
+                    )
+                )
+            }
+        }
+
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val value = obj.opt(key)
+            if (value is JSONObject) {
+                extractFromObj(value, mapping, list)
+            } else if (value is JSONArray) {
+                extractFromArr(value, mapping, list)
+            }
+        }
+    }
+
+    private fun extractFromArr(arr: JSONArray, mapping: Map<String, String>, list: MutableList<ExtractedUpgrade>) {
+        for (i in 0 until arr.length()) {
+            val value = arr.opt(i)
+            if (value is JSONObject) {
+                extractFromObj(value, mapping, list)
+            } else if (value is JSONArray) {
+                extractFromArr(value, mapping, list)
+            }
+        }
     }
 
     private fun loadMapping(assetManager: AssetManager): Map<String, String> {

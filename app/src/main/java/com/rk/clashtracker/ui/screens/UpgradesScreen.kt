@@ -180,27 +180,25 @@ fun UpgradesScreen(
                     )
                 }
             } else {
-                // Key forces recomposition with ticker
-                key(tickTrigger) {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                    ) {
-                        items(filteredUpgrades, key = { it.id }) { upgrade ->
-                            val accountName = accounts.find { it.tag == upgrade.accountTag }?.name ?: upgrade.accountTag
-                            UpgradeItem(
-                                upgrade = upgrade,
-                                accountName = accountName,
-                                onToggleComplete = { viewModel.toggleUpgradeCompletion(upgrade) },
-                                onEditUpgrade = { name, remTime, lvl -> viewModel.updateUpgradeDetails(upgrade.id, name, remTime, lvl) },
-                                onDelete = { viewModel.deleteUpgrade(upgrade.id) }
-                            )
-                        }
-                        item {
-                            Spacer(modifier = Modifier.height(100.dp)) // padding for floating actions
-                        }
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
+                    items(filteredUpgrades, key = { it.id }) { upgrade ->
+                        val accountName = accounts.find { it.tag == upgrade.accountTag }?.name ?: upgrade.accountTag
+                        UpgradeItem(
+                            upgrade = upgrade,
+                            accountName = accountName,
+                            tickTrigger = tickTrigger,
+                            onToggleComplete = { viewModel.toggleUpgradeCompletion(upgrade) },
+                            onEditUpgrade = { name, remTime, lvl -> viewModel.updateUpgradeDetails(upgrade.id, name, remTime, lvl) },
+                            onDelete = { viewModel.deleteUpgrade(upgrade.id) }
+                        )
+                    }
+                    item {
+                        Spacer(modifier = Modifier.height(100.dp)) // padding for floating actions
                     }
                 }
             }
@@ -305,6 +303,7 @@ fun UpgradesScreen(
 fun UpgradeItem(
     upgrade: UpgradeEntity,
     accountName: String,
+    tickTrigger: Int,
     onToggleComplete: () -> Unit,
     onEditUpgrade: (newName: String, newRemainingTime: String, targetLevel: Int?) -> Unit,
     onDelete: () -> Unit
