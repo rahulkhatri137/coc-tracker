@@ -23,6 +23,15 @@ Track Clash of Clans upgrades across multiple accounts, estimate completion time
 
 ---
 
+## 📲 Screenshots 
+<div>
+<img src="screenshots/01.png" width="30%" />
+<img src="screenshots/02.png" width="30%" />
+<img src="screenshots/03.png" width="30%" />
+</div>
+
+---
+
 ## 🤖 AI Assistance Disclosure
 
 This application has been developed with the assistance of advanced Google Artificial Intelligence models for debugging and some initial code structure. 
