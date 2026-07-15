@@ -120,7 +120,7 @@ class ClashViewModel(
             // Send intent to start/stop tracking service
             val intent = Intent(getApplication(), LiveProgressService::class.java).apply {
                 action = if (updated.isLiveTracking) "START_TRACKING" else "STOP_TRACKING"
-                putExtra("upgrade_id", upgrade.id)
+                putExtra("upgrade_id", updated.id)
             }
             startTrackingService(intent)
         }
@@ -128,12 +128,28 @@ class ClashViewModel(
 
     fun deleteUpgrade(id: Int) {
         viewModelScope.launch {
-            repository.deleteUpgradeById(id)
-            val intent = Intent(getApplication(), LiveProgressService::class.java).apply {
-                action = "STOP_TRACKING"
-                putExtra("upgrade_id", id)
+            try {
+                repository.deleteUpgradeById(id)
+                val remainingTrackedUpgrades = upgrades.value.filter { 
+                    it.isLiveTracking && it.id != id 
+                }
+                
+                if (remainingTrackedUpgrades.isEmpty()) {
+                    Log.d("ClashViewModel", "No more live tracked upgrades, service will auto-stop")
+                } else {
+                    val intent = Intent(getApplication(), LiveProgressService::class.java).apply {
+                        action = "STOP_TRACKING"
+                        putExtra("upgrade_id", id)
+                    }
+                    try {
+                        startTrackingService(intent)
+                    } catch (e: Exception) {
+                        Log.w("ClashViewModel", "Could not notify service of deletion (may not be running)", e)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ClashViewModel", "Error deleting upgrade #$id", e)
             }
-            startTrackingService(intent)
         }
     }
 
