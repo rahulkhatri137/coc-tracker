@@ -1,7 +1,9 @@
 package com.rk.clashtracker.ui
 
 import android.app.Application
+import android.content.Intent
 import android.graphics.Bitmap
+import android.os.Build
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
@@ -10,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.rk.clashtracker.data.*
 import com.rk.clashtracker.util.JsonParser
 import com.rk.clashtracker.util.UpgradeScheduler
+import com.rk.clashtracker.util.LiveProgressService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -94,15 +97,56 @@ class ClashViewModel(
         viewModelScope.launch {
             val updated = upgrade.copy(
                 isCompleted = !upgrade.isCompleted,
-                notificationTriggered = if (!upgrade.isCompleted) true else upgrade.notificationTriggered
+                notificationTriggered = if (!upgrade.isCompleted) true else upgrade.notificationTriggered,
+                isLiveTracking = if (!upgrade.isCompleted) false else upgrade.isLiveTracking
             )
             repository.updateUpgrade(updated)
+            if (updated.isCompleted) {
+                // Cancel live notification
+                val intent = Intent(getApplication(), LiveProgressService::class.java).apply {
+                    action = "STOP_TRACKING"
+                    putExtra("upgrade_id", upgrade.id)
+                }
+                startTrackingService(intent)
+            }
+        }
+    }
+
+    fun toggleLiveTracking(upgrade: UpgradeEntity) {
+        viewModelScope.launch {
+            val updated = upgrade.copy(isLiveTracking = !upgrade.isLiveTracking)
+            repository.updateUpgrade(updated)
+            
+            // Send intent to start/stop tracking service
+            val intent = Intent(getApplication(), LiveProgressService::class.java).apply {
+                action = if (updated.isLiveTracking) "START_TRACKING" else "STOP_TRACKING"
+                putExtra("upgrade_id", upgrade.id)
+            }
+            startTrackingService(intent)
         }
     }
 
     fun deleteUpgrade(id: Int) {
         viewModelScope.launch {
             repository.deleteUpgradeById(id)
+            val intent = Intent(getApplication(), LiveProgressService::class.java).apply {
+                action = "STOP_TRACKING"
+                putExtra("upgrade_id", id)
+            }
+            startTrackingService(intent)
+        }
+    }
+
+    private fun startTrackingService(intent: Intent) {
+        val app = getApplication<Application>()
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                app.startForegroundService(intent)
+            } else {
+                app.startService(intent)
+            }
+        } catch (e: Exception) {
+            Log.e("ClashViewModel", "Failed to start live progress service", e)
         }
     }
 

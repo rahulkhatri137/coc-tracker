@@ -193,6 +193,7 @@ fun UpgradesScreen(
                             accountName = accountName,
                             tickTrigger = tickTrigger,
                             onToggleComplete = { viewModel.toggleUpgradeCompletion(upgrade) },
+                            onToggleLiveTracking = { viewModel.toggleLiveTracking(upgrade) },
                             onEditUpgrade = { name, remTime, lvl -> viewModel.updateUpgradeDetails(upgrade.id, name, remTime, lvl) },
                             onDelete = { viewModel.deleteUpgrade(upgrade.id) }
                         )
@@ -270,9 +271,8 @@ fun UpgradesScreen(
         // Paste JSON Dialog
         if (showImportJsonDialog) {
             ImportJsonDialog(
-                accounts = accounts,
                 onDismiss = { showImportJsonDialog = false },
-                onImport = { accountTag, jsonText ->
+                onImport = { jsonText ->
                     viewModel.parseManualJson(jsonText)
                     showImportJsonDialog = false
                     showImportScreenshotDialog = true // Reuse the review/import dialog!
@@ -305,6 +305,7 @@ fun UpgradeItem(
     accountName: String,
     tickTrigger: Int,
     onToggleComplete: () -> Unit,
+    onToggleLiveTracking: () -> Unit,
     onEditUpgrade: (newName: String, newRemainingTime: String, targetLevel: Int?) -> Unit,
     onDelete: () -> Unit
 ) {
@@ -347,6 +348,20 @@ fun UpgradeItem(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // Manual Live Tracking Notification Toggle (if active)
+                    if (!upgrade.isCompleted) {
+                        IconButton(
+                            onClick = onToggleLiveTracking,
+                            modifier = Modifier.testTag("live_tracking_btn_${upgrade.id}")
+                        ) {
+                            Icon(
+                                imageVector = if (upgrade.isLiveTracking) Icons.Default.NotificationsActive else Icons.Default.NotificationsNone,
+                                contentDescription = "Live Notification Progress Tracker",
+                                tint = if (upgrade.isLiveTracking) ClashGold else TextSecondary
+                            )
+                        }
+                    }
+
                     // Edit button
                     IconButton(
                         onClick = { showEditDialog = true },
@@ -400,7 +415,7 @@ fun UpgradeItem(
             Spacer(modifier = Modifier.height(12.dp))
 
             // Countdown / Info line (No progress bar)
-            val remaining = upgrade.remainingSeconds
+            val remaining = remember(upgrade, tickTrigger) { upgrade.remainingSeconds }
             val timerText = if (upgrade.isCompleted) {
                 "Completed 🔨"
             } else if (remaining <= 0) {
@@ -425,6 +440,21 @@ fun UpgradeItem(
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace
+                )
+            }
+
+            // Material 3 Live Progress Indicator (if active)
+            if (!upgrade.isCompleted) {
+                Spacer(modifier = Modifier.height(12.dp))
+                val progress = remember(upgrade, tickTrigger) { upgrade.progress }
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = ClashGold,
+                    trackColor = ClashSlateLight
                 )
             }
         }
@@ -708,13 +738,10 @@ fun ManualAddDialog(
 
 @Composable
 fun ImportJsonDialog(
-    accounts: List<AccountEntity>,
     onDismiss: () -> Unit,
-    onImport: (accountTag: String, jsonText: String) -> Unit
+    onImport: (jsonText: String) -> Unit
 ) {
-    var selectedAccount by remember { mutableStateOf(accounts.firstOrNull()?.tag ?: "") }
     var jsonText by remember { mutableStateOf("") }
-    var dropdownExpanded by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf("") }
 
     AlertDialog(
@@ -725,41 +752,6 @@ fun ImportJsonDialog(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Account Selector
-                Box {
-                    val accountName = accounts.find { it.tag == selectedAccount }?.name ?: selectedAccount
-                    OutlinedButton(
-                        onClick = { dropdownExpanded = true },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Import Into: $accountName")
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                        }
-                    }
-
-                    DropdownMenu(
-                        expanded = dropdownExpanded,
-                        onDismissRequest = { dropdownExpanded = false },
-                        modifier = Modifier.background(ClashSlate)
-                    ) {
-                        accounts.forEach { account ->
-                            DropdownMenuItem(
-                                text = { Text(account.name, color = TextPrimary) },
-                                onClick = {
-                                    selectedAccount = account.tag
-                                    dropdownExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-
                 Text(
                     "Format: {\"data\":1000014,\"lvl\":2,\"timer\":25479},{\"data\":1000000,\"lvl\":5,\"timer\":20382}",
                     color = TextSecondary,
@@ -789,12 +781,10 @@ fun ImportJsonDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    if (selectedAccount.isEmpty()) {
-                        errorText = "Please connect an Account first."
-                    } else if (jsonText.isBlank()) {
-                        errorText = "Please paste a JSON array."
+                    if (jsonText.isBlank()) {
+                        errorText = "Please paste a JSON array or object."
                     } else {
-                        onImport(selectedAccount, jsonText)
+                        onImport(jsonText)
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = ClashGold),

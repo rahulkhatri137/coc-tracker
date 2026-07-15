@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -136,10 +137,13 @@ object UpgradeScheduler {
 
         val levelStr = if (targetLevel > 0) " to Level $targetLevel" else ""
         val title = "Upgrade Finished! 🔨"
-        val text = "[$accountTag] $structureName upgrade$levelStr is complete! Open Clash of Clans to assign a new builder."
+        val text = "[$accountTag] $structureName upgrade$levelStr is complete!"
+
+        val appIconLarge = BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_warning) // fallback
+            .setSmallIcon(R.drawable.ic_notification)
+            .setLargeIcon(appIconLarge)
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
@@ -174,6 +178,8 @@ object UpgradeScheduler {
                         upgrade.targetLevel ?: -1
                     )
                     dao.updateUpgrade(upgrade.copy(isCompleted = true, notificationTriggered = true))
+                } else {
+                    scheduleAlarm(context, upgrade)
                 }
             }
         }
@@ -196,7 +202,6 @@ class UpgradeCompletedReceiver : BroadcastReceiver() {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         UpgradeScheduler.showNotification(context, notificationManager, id, accountTag, structureName, targetLevel)
 
-        // Update database in a coroutine
         CoroutineScope(Dispatchers.IO).launch {
             val db = ClashDatabase.getDatabase(context)
             val dao = db.clashDao()

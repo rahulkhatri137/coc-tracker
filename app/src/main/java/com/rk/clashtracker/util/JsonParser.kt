@@ -70,10 +70,16 @@ object JsonParser {
                 } else {
                     dataVal
                 }
+                val lvlVal = if (obj.has("lvl")) {
+                    val l = obj.optInt("lvl", -1)
+                    if (l != -1) l+1 else null
+                } else {
+                    null
+                }
                 list.add(
                     ExtractedUpgrade(
                         structureName = friendlyName,
-                        targetLevel = null, // ignore lvl values as requested by user
+                        targetLevel = lvlVal,
                         timeLeftString = timeLeftStr
                     )
                 )

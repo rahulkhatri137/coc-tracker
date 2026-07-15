@@ -22,7 +22,8 @@ data class UpgradeEntity(
     val startTime: Long,          // timestamp in ms when upgrade was started
     val durationSeconds: Long,     // total duration of the upgrade in seconds
     val isCompleted: Boolean = false,
-    val notificationTriggered: Boolean = false
+    val notificationTriggered: Boolean = false,
+    val isLiveTracking: Boolean = false
 ) {
     val endTime: Long
         get() = startTime + (durationSeconds * 1000)

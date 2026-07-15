@@ -167,21 +167,26 @@ fun AccountItem(
                         .size(48.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(ClashWood)
-                        .padding(4.dp),
+                        .padding(2.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
                         Text(
                             text = "TH",
                             color = TextPrimary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            lineHeight = 10.sp
                         )
                         Text(
                             text = account.townHallLevel.toString(),
                             color = ClashGoldLight,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            lineHeight = 15.sp
                         )
                     }
                 }
@@ -322,8 +327,8 @@ fun EditAccountDialog(
                     Slider(
                         value = thLevel.toFloat(),
                         onValueChange = { thLevel = it.toInt() },
-                        valueRange = 1f..17f,
-                        steps = 15,
+                        valueRange = 1f..18f,
+                        steps = 16,
                         colors = SliderDefaults.colors(
                             thumbColor = ClashGold,
                             activeTrackColor = ClashGold,
@@ -437,8 +442,8 @@ fun AddAccountDialog(
                     Slider(
                         value = thLevel.toFloat(),
                         onValueChange = { thLevel = it.toInt() },
-                        valueRange = 1f..17f,
-                        steps = 15,
+                        valueRange = 1f..18f,
+                        steps = 16,
                         colors = SliderDefaults.colors(
                             thumbColor = ClashGold,
                             activeTrackColor = ClashGold,
