@@ -257,6 +257,7 @@ class ClashViewModel(
 
     fun importParsedUpgrades(accountTag: String, parsedUpgrades: List<JsonParser.ExtractedUpgrade>) {
         viewModelScope.launch {
+            repository.clearUpgradesForAccount(accountTag)
             parsedUpgrades.forEach { parsed ->
                 val seconds = parseDurationToSeconds(parsed.timeLeftString)
                 if (seconds > 0) {
