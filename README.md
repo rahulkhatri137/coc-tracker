@@ -11,6 +11,8 @@ Track Clash of Clans upgrades across multiple accounts, estimate completion time
 *   **Live Progress Notification**: Features real-time timers that count down to construction completion with support of Live Progress Notification.
 *   **Intelligent JSON Import**: Easily copy and paste raw game-extracted upgrade JSON game data from settings to import in progress upgrades.
 *   **"Next Builder" Visual Highlights**: Automatically scans your active timers to highlight which village and upgrade will complete next.
+*   **Smart Auto-Fill Feature**: When typing a structure's name in either the manual upgrade addition or modification dialogs, the app now shows suggestions based on mapping names.
+*   **Multi-Select & Bulk Deletion Engine**: Selection mode, presenting intuitive checkable states for each upgrade card to delete entries.
 *   **Note**: Doesn't support Helpers and Potions currently but can be planned for future updates.
 
 ---

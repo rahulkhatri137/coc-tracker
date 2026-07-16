@@ -9,6 +9,7 @@ import android.content.pm.ServiceInfo
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.IBinder
+import android.app.PendingIntent
 import androidx.core.app.NotificationCompat
 import com.rk.clashtracker.R
 import com.rk.clashtracker.data.ClashDatabase
@@ -40,7 +41,7 @@ class LiveProgressService : Service() {
             e.printStackTrace()
         }
 
-        if (action == "START_TRACKING" || action == "REFRESH") {
+        if (action == "START_TRACKING" || action == "REFRESH" || action == "NOTIFICATION_DISMISSED") {
             startTrackingLoop()
         } else if (action == "STOP_TRACKING") {
             val upgradeId = intent.getIntExtra("upgrade_id", -1)
@@ -54,16 +55,7 @@ class LiveProgressService : Service() {
     }
 
     private fun startTrackingLoop() {
-        if (updateJob != null && updateJob?.isActive == true) {
-            serviceScope.launch {
-                val db = ClashDatabase.getDatabase(applicationContext)
-                val dao = db.clashDao()
-                val liveUpgrades = dao.getLiveTrackingUpgrades()
-                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                updateNotifications(liveUpgrades, notificationManager)
-            }
-            return
-        }
+        updateJob?.cancel()
 
         updateJob = serviceScope.launch {
             val db = ClashDatabase.getDatabase(applicationContext)
@@ -101,7 +93,6 @@ class LiveProgressService : Service() {
                     }
                 }
 
-                // Query again to get the updated set of live upgrades
                 val currentLiveUpgrades = dao.getLiveTrackingUpgrades()
                 updateNotifications(currentLiveUpgrades, notificationManager)
 
@@ -109,7 +100,15 @@ class LiveProgressService : Service() {
                     break
                 }
 
-                delay(15000)
+                // Dynamically adjust tick rate based on remaining time of the closest upgrade to optimize battery/memory
+                val minRemaining = currentLiveUpgrades.minOfOrNull { it.remainingSeconds } ?: 0L
+                val delayMs = when {
+                    minRemaining < 60 -> 5000L
+                    minRemaining < 3600 -> 30000L
+                    minRemaining < 43200 -> 300000L
+                    else -> 900000L
+                }
+                delay(delayMs)
             }
         }
     }
@@ -131,7 +130,6 @@ class LiveProgressService : Service() {
             } else {
                 startForeground(firstNotificationId, firstNotification)
             }
-            // Explicitly cancel the initial service placeholder notification so it doesn't linger
             notificationManager.cancel(FOREGROUND_NOTIFICATION_ID)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -182,6 +180,17 @@ class LiveProgressService : Service() {
 
         val appIconLarge = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
 
+        val deleteIntent = Intent(this, LiveProgressService::class.java).apply {
+            action = "NOTIFICATION_DISMISSED"
+            putExtra("upgrade_id", upgrade.id)
+        }
+        val deletePendingIntent = PendingIntent.getService(
+            this,
+            upgrade.id + 20000,
+            deleteIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         return NotificationCompat.Builder(this, UpgradeScheduler.LIVE_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setLargeIcon(appIconLarge)
@@ -193,6 +202,7 @@ class LiveProgressService : Service() {
             .setUsesChronometer(true)
             .setChronometerCountDown(true)
             .setWhen(upgrade.endTime)
+            .setDeleteIntent(deletePendingIntent)
             .build()
     }
 

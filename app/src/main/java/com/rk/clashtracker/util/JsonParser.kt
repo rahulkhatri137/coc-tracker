@@ -72,7 +72,7 @@ object JsonParser {
                 }
                 val lvlVal = if (obj.has("lvl")) {
                     val l = obj.optInt("lvl", -1)
-                    if (l != -1) l+1 else null
+                    if (l != -1) l + 1 else null
                 } else {
                     null
                 }
@@ -109,7 +109,10 @@ object JsonParser {
         }
     }
 
+    private var cachedMapping: Map<String, String>? = null
+
     private fun loadMapping(assetManager: AssetManager): Map<String, String> {
+        cachedMapping?.let { return it }
         return try {
             val jsonString = assetManager.open("mapping.json").bufferedReader().use { it.readText() }
             val obj = JSONObject(jsonString)
@@ -119,11 +122,37 @@ object JsonParser {
                 val key = keys.next()
                 map[key] = obj.getString(key)
             }
+            cachedMapping = map
             map
         } catch (e: Exception) {
             Log.e(TAG, "Error loading mapping.json from assets", e)
             emptyMap()
         }
+    }
+
+    private var cachedMappedNames: List<String>? = null
+
+    fun getAutofillSuggestions(assetManager: AssetManager, input: String): List<String> {
+        val names = cachedMappedNames ?: run {
+            val loaded = loadMapping(assetManager).values
+                .filter { it.isNotBlank() }
+                .map { it.replace("_", " ") }
+                .distinct()
+                .sorted()
+            cachedMappedNames = loaded
+            loaded
+        }
+        if (input.isBlank()) return emptyList()
+        val query = input.trim().lowercase()
+        val prefixMatches = names.filter { it.lowercase().startsWith(query) }
+        if (prefixMatches.size >= 3) {
+            return prefixMatches.take(3)
+        }
+        val containMatches = names.filter { 
+            val itemLower = it.lowercase()
+            itemLower.contains(query) && !itemLower.startsWith(query) 
+        }
+        return (prefixMatches + containMatches).take(3)
     }
 
     private fun findJsonObjects(str: String): List<String> {
