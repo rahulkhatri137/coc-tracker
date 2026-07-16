@@ -84,16 +84,31 @@ object UpgradeScheduler {
             return
         }
 
-        try {
-            val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerAtMillis, pendingIntent)
-            alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
-            Log.d(TAG, "Scheduled exact AlarmClock for upgrade #${upgrade.id} at $triggerAtMillis (in ${(triggerAtMillis - now) / 1000} seconds)")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to schedule exact AlarmClock, trying fallback", e)
+        val canScheduleExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            alarmManager.canScheduleExactAlarms()
+        } else {
+            true
+        }
+
+        if (canScheduleExact) {
             try {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-            } catch (ex: Exception) {
-                Log.e(TAG, "Failed to schedule exact alarm fallback, trying standard set", ex)
+                val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerAtMillis, pendingIntent)
+                alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
+                Log.d(TAG, "Scheduled exact AlarmClock for upgrade #${upgrade.id} at $triggerAtMillis (in ${(triggerAtMillis - now) / 1000} seconds)")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to schedule exact AlarmClock, trying exact fallback: ${e.message}")
+                try {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+                } catch (ex: Exception) {
+                    Log.w(TAG, "Failed to schedule exact alarm fallback, trying standard set: ${ex.message}")
+                    alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+                }
+            }
+        } else {
+            Log.d(TAG, "Exact alarm permission not granted, scheduling standard alarm as fallback.")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+            } else {
                 alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
             }
         }
@@ -166,6 +181,9 @@ object UpgradeScheduler {
         notificationManager.notify(id, notification)
     }
 
+    /**
+     * Fallback checking on startup or screen load to ensure completed upgrades are marked and shown.
+     */
     fun checkAndNotifyCompletedUpgrades(context: Context) {
         CoroutineScope(Dispatchers.IO).launch {
             val db = ClashDatabase.getDatabase(context)
