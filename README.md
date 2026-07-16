@@ -8,9 +8,10 @@ Track Clash of Clans upgrades across multiple accounts, estimate completion time
 
 *   **Multi-Village Dashboard**: Connect, view, and manage status overviews for multiple Clash of Clans profile accounts from a single unified hub.
 *   **Active Upgrade Planner**: Track construction and research timers dynamically per village, ensuring your builders and laboratory never sit idle.
-*   **Live Countdown Ticker**: Features real-time responsive UI timers that count down second-by-second to construction completion.
+*   **Live Progress Notification**: Features real-time timers that count down to construction completion with support of Live Progress Notification.
 *   **Intelligent JSON Import**: Easily copy and paste raw game-extracted upgrade JSON game data from settings to import in progress upgrades.
 *   **"Next Builder" Visual Highlights**: Automatically scans your active timers to highlight which village and upgrade will complete next.
+*   **Note**: Doesn't support Helpers and Potions currently but can be planned for future updates.
 
 ---
 
