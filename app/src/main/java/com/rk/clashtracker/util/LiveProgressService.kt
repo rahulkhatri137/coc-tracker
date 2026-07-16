@@ -28,6 +28,17 @@ class LiveProgressService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action
+        
+        val initialNotification = createServiceNotification(0)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(FOREGROUND_NOTIFICATION_ID, initialNotification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            } else {
+                startForeground(FOREGROUND_NOTIFICATION_ID, initialNotification)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
 
         if (action == "START_TRACKING" || action == "REFRESH") {
             startTrackingLoop()
@@ -48,6 +59,7 @@ class LiveProgressService : Service() {
                 val db = ClashDatabase.getDatabase(applicationContext)
                 val dao = db.clashDao()
                 val liveUpgrades = dao.getLiveTrackingUpgrades()
+                updateServiceNotification(liveUpgrades.size)
             }
             return
         }
@@ -59,8 +71,11 @@ class LiveProgressService : Service() {
 
             while (isActive) {
                 val liveUpgrades = dao.getLiveTrackingUpgrades()
+                
+                updateServiceNotification(liveUpgrades.size)
 
                 if (liveUpgrades.isEmpty()) {
+                    stopForeground(true)
                     stopSelf()
                     break
                 }
@@ -76,7 +91,6 @@ class LiveProgressService : Service() {
                             upgrade.structureName,
                             upgrade.targetLevel ?: -1
                         )
-
                         dao.updateUpgrade(
                             upgrade.copy(
                                 isCompleted = true,
@@ -89,15 +103,43 @@ class LiveProgressService : Service() {
                         showProgressNotification(notificationManager, upgrade)
                     }
                 }
-
                 delay(15000)
             }
         }
     }
 
+    private fun createServiceNotification(activeCount: Int): Notification {
+        val title = "🔨 Clash Upgrade Tracker"
+        val text = if (activeCount > 0) "Tracking $activeCount active upgrades live..." else "Service active. Waiting for manual tracking..."
+        val appIconLarge = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
+
+        return NotificationCompat.Builder(this, UpgradeScheduler.LIVE_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setLargeIcon(appIconLarge) 
+            .setContentTitle(title)
+            .setContentText(text)
+            .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .build()
+    }
+
+    private fun updateServiceNotification(activeCount: Int) {
+        try {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val notification = createServiceNotification(activeCount)
+            notificationManager.notify(FOREGROUND_NOTIFICATION_ID, notification)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     private fun cancelNotificationForUpgrade(upgradeId: Int) {
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.cancel(upgradeId + 10000)
+        try {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.cancel(upgradeId + 10000) 
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun showProgressNotification(notificationManager: NotificationManager, upgrade: UpgradeEntity) {
@@ -111,20 +153,24 @@ class LiveProgressService : Service() {
 
         val appIconLarge = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
 
-        val notification = NotificationCompat.Builder(this, UpgradeScheduler.CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setLargeIcon(appIconLarge)
+        val notification = NotificationCompat.Builder(this, UpgradeScheduler.LIVE_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification) 
+            .setLargeIcon(appIconLarge) 
             .setContentTitle(title)
             .setContentText(text)
             .setOngoing(true)
-            .setOnlyAlertOnce(true)
+            .setOnlyAlertOnce(true) 
             .setProgress(100, progressPercent, false)
             .setUsesChronometer(true)
             .setChronometerCountDown(true)
             .setWhen(upgrade.endTime)
             .build()
 
-        notificationManager.notify(notificationId, notification)
+        try {
+            notificationManager.notify(notificationId, notification)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     override fun onDestroy() {

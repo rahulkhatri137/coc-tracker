@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 object UpgradeScheduler {
     private const val TAG = "UpgradeScheduler"
     const val CHANNEL_ID = "clash_upgrades_channel"
+    const val LIVE_CHANNEL_ID = "clash_live_channel"
     private const val EXTRA_UPGRADE_ID = "extra_upgrade_id"
     private const val EXTRA_ACCOUNT_TAG = "extra_account_tag"
     private const val EXTRA_STRUCTURE_NAME = "extra_structure_name"
@@ -30,6 +31,8 @@ object UpgradeScheduler {
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
             val name = "Clash of Clans Upgrades"
             val descriptionText = "Notifications for completed upgrades"
             val importance = NotificationManager.IMPORTANCE_HIGH
@@ -38,8 +41,18 @@ object UpgradeScheduler {
                 enableVibration(true)
                 setShowBadge(true)
             }
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
+
+            val liveChannelName = "Live Progress Tracker"
+            val liveChannelDesc = "Real-time countdown for in-progress upgrades"
+            val liveImportance = NotificationManager.IMPORTANCE_LOW
+            val liveChannel = NotificationChannel(LIVE_CHANNEL_ID, liveChannelName, liveImportance).apply {
+                description = liveChannelDesc
+                enableVibration(false)
+                setShowBadge(false)
+                setSound(null, null)
+            }
+            notificationManager.createNotificationChannel(liveChannel)
         }
     }
 
@@ -66,7 +79,6 @@ object UpgradeScheduler {
         val now = System.currentTimeMillis()
 
         if (triggerAtMillis <= now) {
-            // Already finished, trigger immediately
             Log.d(TAG, "Upgrade #${upgrade.id} is already completed. Triggering immediate notification.")
             triggerImmediateNotification(context, upgrade)
             return
@@ -104,7 +116,6 @@ object UpgradeScheduler {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         showNotification(context, notificationManager, upgrade.id, upgrade.accountTag, upgrade.structureName, upgrade.targetLevel ?: -1)
         
-        // Mark as completed in DB
         CoroutineScope(Dispatchers.IO).launch {
             val db = ClashDatabase.getDatabase(context)
             val dao = db.clashDao()
@@ -155,9 +166,6 @@ object UpgradeScheduler {
         notificationManager.notify(id, notification)
     }
 
-    /**
-     * Fallback checking on startup or screen load to ensure completed upgrades are marked and shown.
-     */
     fun checkAndNotifyCompletedUpgrades(context: Context) {
         CoroutineScope(Dispatchers.IO).launch {
             val db = ClashDatabase.getDatabase(context)

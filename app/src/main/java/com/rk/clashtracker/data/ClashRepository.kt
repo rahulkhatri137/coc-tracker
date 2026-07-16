@@ -53,6 +53,10 @@ class ClashRepository(
         }
     }
 
+    suspend fun getUpgradeById(id: Int): UpgradeEntity? {
+        return clashDao.getUpgradeById(id)
+    }
+
     suspend fun deleteUpgradeById(id: Int) {
         UpgradeScheduler.cancelAlarm(context, id)
         clashDao.deleteUpgradeById(id)
