@@ -120,7 +120,7 @@ class ClashViewModel(
             // Send intent to start/stop tracking service
             val intent = Intent(getApplication(), LiveProgressService::class.java).apply {
                 action = if (updated.isLiveTracking) "START_TRACKING" else "STOP_TRACKING"
-                putExtra("upgrade_id", updated.id)
+                putExtra("upgrade_id", upgrade.id)
             }
             startTrackingService(intent)
         }
@@ -128,27 +128,29 @@ class ClashViewModel(
 
     fun deleteUpgrade(id: Int) {
         viewModelScope.launch {
+            val upgrade = repository.getUpgradeById(id)
+            val wasLiveTracking = upgrade?.isLiveTracking == true
+            
+            repository.deleteUpgradeById(id)
+            
+            // Explicitly dismiss any live notification progress bar directly
             try {
-                repository.deleteUpgradeById(id)
-                val remainingTrackedUpgrades = upgrades.value.filter { 
-                    it.isLiveTracking && it.id != id 
-                }
-                
-                if (remainingTrackedUpgrades.isEmpty()) {
-                    Log.d("ClashViewModel", "No more live tracked upgrades, service will auto-stop")
-                } else {
+                val notificationManager = getApplication<Application>().getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                notificationManager.cancel(id + 10000)
+            } catch (e: Exception) {
+                Log.e("ClashViewModel", "Error directly cancelling notification", e)
+            }
+
+            if (wasLiveTracking) {
+                try {
                     val intent = Intent(getApplication(), LiveProgressService::class.java).apply {
                         action = "STOP_TRACKING"
                         putExtra("upgrade_id", id)
                     }
-                    try {
-                        startTrackingService(intent)
-                    } catch (e: Exception) {
-                        Log.w("ClashViewModel", "Could not notify service of deletion (may not be running)", e)
-                    }
+                    startTrackingService(intent)
+                } catch (e: Exception) {
+                    Log.e("ClashViewModel", "Error starting service for stop tracking", e)
                 }
-            } catch (e: Exception) {
-                Log.e("ClashViewModel", "Error deleting upgrade #$id", e)
             }
         }
     }
