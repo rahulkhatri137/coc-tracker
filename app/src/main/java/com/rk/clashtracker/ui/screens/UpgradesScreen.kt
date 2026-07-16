@@ -69,9 +69,19 @@ fun UpgradesScreen(
 
     val context = LocalContext.current
 
+    var selectedTab by remember { mutableStateOf(0) } 
+    var isSelectionMode by remember { mutableStateOf(false) }
+    val selectedUpgradeIds = remember { mutableStateListOf<Int>() }
+    var showDeleteConfirmationDialog by remember { mutableStateOf(false) }
+    var isDeleteAllConfirmed by remember { mutableStateOf(false) }
+
     val filteredUpgrades = upgrades.filter { upgrade ->
         selectedAccountTag == "All" || upgrade.accountTag == selectedAccountTag
     }
+
+    val ongoingUpgrades = filteredUpgrades.filter { !it.isCompleted }
+    val completedUpgrades = filteredUpgrades.filter { it.isCompleted }
+    val currentTabUpgrades = if (selectedTab == 0) ongoingUpgrades else completedUpgrades
 
     Box(
         modifier = modifier
@@ -147,8 +157,163 @@ fun UpgradesScreen(
                 }
             }
 
+            // Tab Row
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = Color.Transparent,
+                contentColor = ClashGold,
+                modifier = Modifier.padding(bottom = 8.dp)
+            ) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { 
+                        selectedTab = 0 
+                        isSelectionMode = false
+                        selectedUpgradeIds.clear()
+                    },
+                    text = {
+                        Text(
+                            text = "Ongoing (${ongoingUpgrades.size})",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    },
+                    selectedContentColor = ClashGold,
+                    unselectedContentColor = TextSecondary
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { 
+                        selectedTab = 1 
+                        isSelectionMode = false
+                        selectedUpgradeIds.clear()
+                    },
+                    text = {
+                        Text(
+                            text = "Completed (${completedUpgrades.size})",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    },
+                    selectedContentColor = ClashGold,
+                    unselectedContentColor = TextSecondary
+                )
+            }
+
+            // Bulk Actions / Selection Header Bar
+            if (filteredUpgrades.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (!isSelectionMode) {
+                        Text(
+                            text = "Total: ${currentTabUpgrades.size}",
+                            color = TextSecondary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // "Select" Button
+                            TextButton(
+                                onClick = { 
+                                    isSelectionMode = true 
+                                    selectedUpgradeIds.clear()
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp).testTag("select_multiple_button")
+                            ) {
+                                Icon(Icons.Default.List, contentDescription = null, tint = ClashGold, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Select Multiple", color = ClashGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            // "Delete All" Button
+                            TextButton(
+                                onClick = {
+                                    isDeleteAllConfirmed = true
+                                    showDeleteConfirmationDialog = true
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp).testTag("delete_all_button")
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFEF5350), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Delete All", color = Color(0xFFEF5350), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    } else {
+                        // Selection Mode Actions
+                        Text(
+                            text = "${selectedUpgradeIds.size} Selected",
+                            color = ClashGold,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            // "Select All" / "Clear" Button
+                            val allSelected = selectedUpgradeIds.size == currentTabUpgrades.size && currentTabUpgrades.isNotEmpty()
+                            TextButton(
+                                onClick = {
+                                    if (allSelected) {
+                                        selectedUpgradeIds.clear()
+                                    } else {
+                                        selectedUpgradeIds.clear()
+                                        selectedUpgradeIds.addAll(currentTabUpgrades.map { it.id })
+                                    }
+                                },
+                                contentPadding = PaddingValues(horizontal = 4.dp),
+                                modifier = Modifier.height(32.dp).testTag("select_all_toggle_button")
+                            ) {
+                                Text(
+                                    text = if (allSelected) "Deselect All" else "Select All",
+                                    color = TextPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            // "Delete Selected" Button
+                            TextButton(
+                                onClick = {
+                                    if (selectedUpgradeIds.isNotEmpty()) {
+                                        isDeleteAllConfirmed = false
+                                        showDeleteConfirmationDialog = true
+                                    }
+                                },
+                                enabled = selectedUpgradeIds.isNotEmpty(),
+                                contentPadding = PaddingValues(horizontal = 4.dp),
+                                modifier = Modifier.height(32.dp).testTag("delete_selected_button")
+                            ) {
+                                Text(
+                                    text = "Delete",
+                                    color = if (selectedUpgradeIds.isNotEmpty()) Color(0xFFEF5350) else TextSecondary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            // "Cancel" Button
+                            TextButton(
+                                onClick = { 
+                                    isSelectionMode = false 
+                                    selectedUpgradeIds.clear()
+                                },
+                                contentPadding = PaddingValues(horizontal = 4.dp),
+                                modifier = Modifier.height(32.dp).testTag("cancel_selection_button")
+                            ) {
+                                Text("Cancel", color = TextSecondary, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
             // Upgrades List
-            if (filteredUpgrades.isEmpty()) {
+            if (currentTabUpgrades.isEmpty()) {
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -165,14 +330,18 @@ fun UpgradesScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "No Active Upgrades",
+                        text = if (selectedTab == 0) "No Active Upgrades" else "No Completed Upgrades",
                         color = TextPrimary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Use the buttons below to log your upgrades manually or paste a JSON file.",
+                        text = if (selectedTab == 0) {
+                            "Use the buttons below to log your upgrades manually or paste a JSON file."
+                        } else {
+                            "Completed upgrades will be stored here for your records."
+                        },
                         color = TextSecondary,
                         fontSize = 13.sp,
                         textAlign = TextAlign.Center,
@@ -186,12 +355,21 @@ fun UpgradesScreen(
                         .weight(1f)
                         .fillMaxWidth()
                 ) {
-                    items(filteredUpgrades, key = { it.id }) { upgrade ->
+                    items(currentTabUpgrades, key = { it.id }) { upgrade ->
                         val accountName = accounts.find { it.tag == upgrade.accountTag }?.name ?: upgrade.accountTag
                         UpgradeItem(
                             upgrade = upgrade,
                             accountName = accountName,
                             tickTrigger = tickTrigger,
+                            isSelectionMode = isSelectionMode,
+                            isSelected = selectedUpgradeIds.contains(upgrade.id),
+                            onToggleSelection = {
+                                if (selectedUpgradeIds.contains(upgrade.id)) {
+                                    selectedUpgradeIds.remove(upgrade.id)
+                                } else {
+                                    selectedUpgradeIds.add(upgrade.id)
+                                }
+                            },
                             onToggleComplete = { viewModel.toggleUpgradeCompletion(upgrade) },
                             onToggleLiveTracking = { viewModel.toggleLiveTracking(upgrade) },
                             onEditUpgrade = { name, remTime, lvl -> viewModel.updateUpgradeDetails(upgrade.id, name, remTime, lvl) },
@@ -296,6 +474,53 @@ fun UpgradesScreen(
                 }
             )
         }
+
+        // Delete Confirmation Dialog
+        if (showDeleteConfirmationDialog) {
+            val count = if (isDeleteAllConfirmed) currentTabUpgrades.size else selectedUpgradeIds.size
+            val titleText = if (isDeleteAllConfirmed) "Delete All Upgrades" else "Delete Selected Upgrades"
+            val messageText = if (isDeleteAllConfirmed) {
+                "Are you sure you want to delete all $count upgrades in this section?"
+            } else {
+                "Are you sure you want to delete the selected $count upgrades?"
+            }
+
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirmationDialog = false },
+                title = { Text(titleText, color = Color(0xFFEF5350), fontWeight = FontWeight.Bold) },
+                text = { Text(messageText, color = TextPrimary) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val toDelete = if (isDeleteAllConfirmed) {
+                                currentTabUpgrades
+                            } else {
+                                currentTabUpgrades.filter { selectedUpgradeIds.contains(it.id) }
+                            }
+                            viewModel.deleteMultipleUpgrades(toDelete)
+                            
+                            isSelectionMode = false
+                            selectedUpgradeIds.clear()
+                            showDeleteConfirmationDialog = false
+                            Toast.makeText(context, "Deleted $count upgrades successfully!", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF5350)),
+                        modifier = Modifier.testTag("confirm_delete_btn")
+                    ) {
+                        Text("Delete", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showDeleteConfirmationDialog = false },
+                        modifier = Modifier.testTag("cancel_delete_btn")
+                    ) {
+                        Text("Cancel", color = ClashGold)
+                    }
+                },
+                containerColor = ClashSlate
+            )
+        }
     }
 }
 
@@ -304,6 +529,9 @@ fun UpgradeItem(
     upgrade: UpgradeEntity,
     accountName: String,
     tickTrigger: Int,
+    isSelectionMode: Boolean = false,
+    isSelected: Boolean = false,
+    onToggleSelection: () -> Unit = {},
     onToggleComplete: () -> Unit,
     onToggleLiveTracking: () -> Unit,
     onEditUpgrade: (newName: String, newRemainingTime: String, targetLevel: Int?) -> Unit,
@@ -324,138 +552,169 @@ fun UpgradeItem(
                 shape = RoundedCornerShape(16.dp)
             )
             .testTag("upgrade_item_${upgrade.id}")
+            .let { modifier ->
+                if (isSelectionMode) {
+                    modifier.clickable { onToggleSelection() }
+                } else {
+                    modifier
+                }
+            }
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Header: Nickname tag + completion button
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Account tag badge
-                Box(
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (isSelectionMode) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onToggleSelection() },
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = ClashGold,
+                        uncheckedColor = TextSecondary,
+                        checkmarkColor = Color.Black
+                    ),
                     modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(ClashWood)
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .padding(end = 12.dp)
+                        .testTag("checkbox_${upgrade.id}")
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                // Header: Nickname tag + completion button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Account tag badge
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(ClashWood)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = accountName,
+                            color = ClashGoldLight,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    if (!isSelectionMode) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            // Manual Live Tracking Notification Toggle (if active)
+                            if (!upgrade.isCompleted) {
+                                IconButton(
+                                    onClick = onToggleLiveTracking,
+                                    modifier = Modifier.testTag("live_tracking_btn_${upgrade.id}")
+                                ) {
+                                    Icon(
+                                        imageVector = if (upgrade.isLiveTracking) Icons.Default.NotificationsActive else Icons.Default.NotificationsNone,
+                                        contentDescription = "Live Notification Progress Tracker",
+                                        tint = if (upgrade.isLiveTracking) ClashGold else TextSecondary
+                                    )
+                                }
+                            }
+
+                            // Edit button
+                            IconButton(
+                                onClick = { showEditDialog = true },
+                                modifier = Modifier.testTag("edit_upgrade_btn_${upgrade.id}")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit Upgrade",
+                                    tint = ClashGoldLight
+                                )
+                            }
+
+                            // Quick Complete Switch/Button
+                            IconButton(
+                                onClick = onToggleComplete,
+                                modifier = Modifier.testTag("complete_toggle_btn_${upgrade.id}")
+                            ) {
+                                Icon(
+                                    imageVector = if (upgrade.isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                    contentDescription = "Complete Toggle",
+                                    tint = if (upgrade.isCompleted) Color(0xFF4CAF50) else TextSecondary
+                                )
+                            }
+
+                            // Delete button
+                            IconButton(
+                                onClick = onDelete,
+                                modifier = Modifier.testTag("delete_upgrade_btn_${upgrade.id}")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete",
+                                    tint = Color(0xFFEF5350).copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Body: Structure name & target level
+                val levelText = if (upgrade.targetLevel != null && upgrade.targetLevel > 0) " (Lvl ${upgrade.targetLevel})" else ""
+                Text(
+                    text = "${upgrade.structureName}$levelText",
+                    color = if (upgrade.isCompleted) TextSecondary else TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Countdown / Info line (No progress bar)
+                val remaining = remember(upgrade, tickTrigger) { upgrade.remainingSeconds }
+                val timerText = if (upgrade.isCompleted) {
+                    "Completed 🔨"
+                } else if (remaining <= 0) {
+                    "Finished! Pending Builder"
+                } else {
+                    formatSecondsToDuration(remaining)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = accountName,
-                        color = ClashGoldLight,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                        text = if (upgrade.isCompleted) "Status" else "Time Left",
+                        color = TextSecondary,
+                        fontSize = 13.sp
+                    )
+                    Text(
+                        text = timerText,
+                        color = if (upgrade.isCompleted) Color(0xFF4CAF50) else ClashGold,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // Manual Live Tracking Notification Toggle (if active)
-                    if (!upgrade.isCompleted) {
-                        IconButton(
-                            onClick = onToggleLiveTracking,
-                            modifier = Modifier.testTag("live_tracking_btn_${upgrade.id}")
-                        ) {
-                            Icon(
-                                imageVector = if (upgrade.isLiveTracking) Icons.Default.NotificationsActive else Icons.Default.NotificationsNone,
-                                contentDescription = "Live Notification Progress Tracker",
-                                tint = if (upgrade.isLiveTracking) ClashGold else TextSecondary
-                            )
-                        }
-                    }
-
-                    // Edit button
-                    IconButton(
-                        onClick = { showEditDialog = true },
-                        modifier = Modifier.testTag("edit_upgrade_btn_${upgrade.id}")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit Upgrade",
-                            tint = ClashGoldLight
-                        )
-                    }
-
-                    // Quick Complete Switch/Button
-                    IconButton(
-                        onClick = onToggleComplete,
-                        modifier = Modifier.testTag("complete_toggle_btn_${upgrade.id}")
-                    ) {
-                        Icon(
-                            imageVector = if (upgrade.isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                            contentDescription = "Complete Toggle",
-                            tint = if (upgrade.isCompleted) Color(0xFF4CAF50) else TextSecondary
-                        )
-                    }
-
-                    // Delete button
-                    IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier.testTag("delete_upgrade_btn_${upgrade.id}")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete",
-                            tint = Color(0xFFEF5350).copy(alpha = 0.8f)
-                        )
-                    }
+                // Material 3 Live Progress Indicator (if active)
+                if (!upgrade.isCompleted) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    val progress = remember(upgrade, tickTrigger) { upgrade.progress }
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = ClashGold,
+                        trackColor = ClashSlateLight
+                    )
                 }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Body: Structure name & target level
-            val levelText = if (upgrade.targetLevel != null && upgrade.targetLevel > 0) " (Lvl ${upgrade.targetLevel})" else ""
-            Text(
-                text = "${upgrade.structureName}$levelText",
-                color = if (upgrade.isCompleted) TextSecondary else TextPrimary,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleMedium
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Countdown / Info line (No progress bar)
-            val remaining = remember(upgrade, tickTrigger) { upgrade.remainingSeconds }
-            val timerText = if (upgrade.isCompleted) {
-                "Completed 🔨"
-            } else if (remaining <= 0) {
-                "Finished! Pending Builder"
-            } else {
-                formatSecondsToDuration(remaining)
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (upgrade.isCompleted) "Status" else "Time Left",
-                    color = TextSecondary,
-                    fontSize = 13.sp
-                )
-                Text(
-                    text = timerText,
-                    color = if (upgrade.isCompleted) Color(0xFF4CAF50) else ClashGold,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-
-            // Material 3 Live Progress Indicator (if active)
-            if (!upgrade.isCompleted) {
-                Spacer(modifier = Modifier.height(12.dp))
-                val progress = remember(upgrade, tickTrigger) { upgrade.progress }
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
-                    color = ClashGold,
-                    trackColor = ClashSlateLight
-                )
             }
         }
     }
