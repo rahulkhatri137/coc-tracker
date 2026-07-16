@@ -25,6 +25,9 @@ interface ClashDao {
     @Query("SELECT * FROM upgrades WHERE accountTag = :accountTag ORDER BY startTime + (durationSeconds * 1000) ASC")
     fun getUpgradesForAccountFlow(accountTag: String): Flow<List<UpgradeEntity>>
 
+    @Query("SELECT * FROM upgrades WHERE accountTag = :accountTag")
+    suspend fun getUpgradesForAccount(accountTag: String): List<UpgradeEntity>
+
     @Query("SELECT * FROM upgrades WHERE isCompleted = 0")
     suspend fun getActiveUpgrades(): List<UpgradeEntity>
 

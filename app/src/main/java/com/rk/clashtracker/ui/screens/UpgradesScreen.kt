@@ -58,15 +58,6 @@ fun UpgradesScreen(
     var showImportJsonDialog by remember { mutableStateOf(false) }
     var showImportScreenshotDialog by remember { mutableStateOf(false) }
 
-    // Live countdown trigger: increments every second to force recomposition of countdown fields
-    var tickTrigger by remember { mutableStateOf(0) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1000)
-            tickTrigger++
-        }
-    }
-
     val context = LocalContext.current
 
     var selectedTab by remember { mutableStateOf(0) } 
@@ -360,7 +351,6 @@ fun UpgradesScreen(
                         UpgradeItem(
                             upgrade = upgrade,
                             accountName = accountName,
-                            tickTrigger = tickTrigger,
                             isSelectionMode = isSelectionMode,
                             isSelected = selectedUpgradeIds.contains(upgrade.id),
                             onToggleSelection = {
@@ -525,10 +515,86 @@ fun UpgradesScreen(
 }
 
 @Composable
+fun LiveTimerText(
+    upgrade: UpgradeEntity,
+    modifier: Modifier = Modifier
+) {
+    var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(upgrade.isCompleted, upgrade.endTime) {
+        if (!upgrade.isCompleted && upgrade.endTime > System.currentTimeMillis()) {
+            while (true) {
+                delay(1000)
+                currentTime = System.currentTimeMillis()
+            }
+        }
+    }
+
+    val remainingSeconds = remember(upgrade, currentTime) {
+        val remainingMs = upgrade.endTime - currentTime
+        (remainingMs / 1000).coerceAtLeast(0)
+    }
+
+    val timerText = if (upgrade.isCompleted) {
+        "Completed 🔨"
+    } else if (remainingSeconds <= 0) {
+        "Finished! Pending Builder"
+    } else {
+        formatSecondsToDuration(remainingSeconds)
+    }
+
+    Text(
+        text = timerText,
+        color = if (upgrade.isCompleted) Color(0xFF4CAF50) else ClashGold,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Bold,
+        fontFamily = FontFamily.Monospace,
+        modifier = modifier
+    )
+}
+
+@Composable
+fun LiveProgressBar(
+    upgrade: UpgradeEntity,
+    modifier: Modifier = Modifier
+) {
+    if (!upgrade.isCompleted) {
+        var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
+
+        LaunchedEffect(upgrade.startTime, upgrade.endTime) {
+            if (upgrade.endTime > System.currentTimeMillis()) {
+                while (true) {
+                    delay(1000)
+                    currentTime = System.currentTimeMillis()
+                }
+            }
+        }
+
+        val progress = remember(upgrade, currentTime) {
+            if (upgrade.durationSeconds <= 0) 1f
+            else {
+                val elapsed = currentTime - upgrade.startTime
+                val progressVal = elapsed.toFloat() / (upgrade.durationSeconds * 1000f)
+                progressVal.coerceIn(0f, 1f)
+            }
+        }
+
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = ClashGold,
+            trackColor = ClashSlateLight
+        )
+    }
+}
+
+@Composable
 fun UpgradeItem(
     upgrade: UpgradeEntity,
     accountName: String,
-    tickTrigger: Int,
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onToggleSelection: () -> Unit = {},
@@ -672,16 +738,6 @@ fun UpgradeItem(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Countdown / Info line (No progress bar)
-                val remaining = remember(upgrade, tickTrigger) { upgrade.remainingSeconds }
-                val timerText = if (upgrade.isCompleted) {
-                    "Completed 🔨"
-                } else if (remaining <= 0) {
-                    "Finished! Pending Builder"
-                } else {
-                    formatSecondsToDuration(remaining)
-                }
-
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -692,28 +748,13 @@ fun UpgradeItem(
                         color = TextSecondary,
                         fontSize = 13.sp
                     )
-                    Text(
-                        text = timerText,
-                        color = if (upgrade.isCompleted) Color(0xFF4CAF50) else ClashGold,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
+                    LiveTimerText(upgrade = upgrade)
                 }
 
                 // Material 3 Live Progress Indicator (if active)
                 if (!upgrade.isCompleted) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    val progress = remember(upgrade, tickTrigger) { upgrade.progress }
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp)),
-                        color = ClashGold,
-                        trackColor = ClashSlateLight
-                    )
+                    LiveProgressBar(upgrade = upgrade)
                 }
             }
         }

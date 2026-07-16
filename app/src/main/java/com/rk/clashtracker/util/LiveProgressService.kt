@@ -59,7 +59,8 @@ class LiveProgressService : Service() {
                 val db = ClashDatabase.getDatabase(applicationContext)
                 val dao = db.clashDao()
                 val liveUpgrades = dao.getLiveTrackingUpgrades()
-                updateServiceNotification(liveUpgrades.size)
+                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                updateNotifications(liveUpgrades, notificationManager)
             }
             return
         }
@@ -71,8 +72,6 @@ class LiveProgressService : Service() {
 
             while (isActive) {
                 val liveUpgrades = dao.getLiveTrackingUpgrades()
-                
-                updateServiceNotification(liveUpgrades.size)
 
                 if (liveUpgrades.isEmpty()) {
                     stopForeground(true)
@@ -99,23 +98,64 @@ class LiveProgressService : Service() {
                             )
                         )
                         cancelNotificationForUpgrade(upgrade.id)
-                    } else {
-                        showProgressNotification(notificationManager, upgrade)
                     }
                 }
+
+                // Query again to get the updated set of live upgrades
+                val currentLiveUpgrades = dao.getLiveTrackingUpgrades()
+                updateNotifications(currentLiveUpgrades, notificationManager)
+
+                if (currentLiveUpgrades.isEmpty()) {
+                    break
+                }
+
                 delay(15000)
+            }
+        }
+    }
+
+    private fun updateNotifications(liveUpgrades: List<UpgradeEntity>, notificationManager: NotificationManager) {
+        if (liveUpgrades.isEmpty()) {
+            stopForeground(true)
+            stopSelf()
+            return
+        }
+
+        val firstUpgrade = liveUpgrades[0]
+        val firstNotification = buildProgressNotification(firstUpgrade)
+        val firstNotificationId = firstUpgrade.id + 10000
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(firstNotificationId, firstNotification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            } else {
+                startForeground(firstNotificationId, firstNotification)
+            }
+            // Explicitly cancel the initial service placeholder notification so it doesn't linger
+            notificationManager.cancel(FOREGROUND_NOTIFICATION_ID)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        for (i in 1 until liveUpgrades.size) {
+            val upgrade = liveUpgrades[i]
+            val notification = buildProgressNotification(upgrade)
+            try {
+                notificationManager.notify(upgrade.id + 10000, notification)
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
 
     private fun createServiceNotification(activeCount: Int): Notification {
         val title = "🔨 Clash Upgrade Tracker"
-        val text = if (activeCount > 0) "Tracking $activeCount active upgrades live..." else "Service active. Waiting for manual tracking..."
+        val text = "Service active. Starting tracking..."
         val appIconLarge = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
 
         return NotificationCompat.Builder(this, UpgradeScheduler.LIVE_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setLargeIcon(appIconLarge) 
+            .setLargeIcon(appIconLarge)
             .setContentTitle(title)
             .setContentText(text)
             .setOngoing(true)
@@ -123,29 +163,18 @@ class LiveProgressService : Service() {
             .build()
     }
 
-    private fun updateServiceNotification(activeCount: Int) {
-        try {
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val notification = createServiceNotification(activeCount)
-            notificationManager.notify(FOREGROUND_NOTIFICATION_ID, notification)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
     private fun cancelNotificationForUpgrade(upgradeId: Int) {
         try {
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.cancel(upgradeId + 10000) 
+            notificationManager.cancel(upgradeId + 10000)
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    private fun showProgressNotification(notificationManager: NotificationManager, upgrade: UpgradeEntity) {
+    private fun buildProgressNotification(upgrade: UpgradeEntity): Notification {
         val progressPercent = (upgrade.progress * 100).toInt()
         val remainingStr = formatSecondsToDuration(upgrade.remainingSeconds)
-        val notificationId = upgrade.id + 10000
 
         val levelStr = if (upgrade.targetLevel != null && upgrade.targetLevel > 0) " (Lvl ${upgrade.targetLevel})" else ""
         val title = "🔨 Upgrading ${upgrade.structureName}$levelStr"
@@ -153,24 +182,18 @@ class LiveProgressService : Service() {
 
         val appIconLarge = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
 
-        val notification = NotificationCompat.Builder(this, UpgradeScheduler.LIVE_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification) 
-            .setLargeIcon(appIconLarge) 
+        return NotificationCompat.Builder(this, UpgradeScheduler.LIVE_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setLargeIcon(appIconLarge)
             .setContentTitle(title)
             .setContentText(text)
             .setOngoing(true)
-            .setOnlyAlertOnce(true) 
+            .setOnlyAlertOnce(true)
             .setProgress(100, progressPercent, false)
             .setUsesChronometer(true)
             .setChronometerCountDown(true)
             .setWhen(upgrade.endTime)
             .build()
-
-        try {
-            notificationManager.notify(notificationId, notification)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
     }
 
     override fun onDestroy() {
