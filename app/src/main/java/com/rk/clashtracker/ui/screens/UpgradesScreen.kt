@@ -60,7 +60,7 @@ fun UpgradesScreen(
 
     val context = LocalContext.current
 
-    var selectedTab by remember { mutableStateOf(0) } 
+    var selectedTab by remember { mutableStateOf(0) }
     var isSelectionMode by remember { mutableStateOf(false) }
     val selectedUpgradeIds = remember { mutableStateListOf<Int>() }
     var showDeleteConfirmationDialog by remember { mutableStateOf(false) }
@@ -81,7 +81,6 @@ fun UpgradesScreen(
             .padding(16.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Heading
             Text(
                 text = "Upgrade Planner",
                 color = ClashGold,
@@ -782,6 +781,12 @@ fun EditUpgradeDialog(
     var structureName by remember { mutableStateOf(upgrade.structureName) }
     var targetLevelString by remember { mutableStateOf(upgrade.targetLevel?.toString() ?: "") }
     
+    val context = LocalContext.current
+    val suggestions = remember(structureName) {
+        if (structureName.isBlank()) emptyList()
+        else JsonParser.getAutofillSuggestions(context.assets, structureName)
+    }
+    
     // Suggest the current remaining duration pre-filled in human readable format
     val currentRemaining = upgrade.remainingSeconds
     val currentRemainingStr = if (currentRemaining > 0) formatSecondsToDuration(currentRemaining) else ""
@@ -808,6 +813,46 @@ fun EditUpgradeDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                if (suggestions.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(ClashSlateLight)
+                            .border(1.dp, ClashGold.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                    ) {
+                        suggestions.forEachIndexed { index, suggestion ->
+                            if (index > 0) {
+                                Divider(color = ClashSlate.copy(alpha = 0.5f), thickness = 1.dp)
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { 
+                                        structureName = suggestion
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Suggestion",
+                                    tint = ClashGold.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = suggestion,
+                                    color = ClashGoldLight,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.testTag("autofill_suggestion_$suggestion")
+                                )
+                            }
+                        }
+                    }
+                }
 
                 OutlinedTextField(
                     value = targetLevelString,
@@ -877,6 +922,12 @@ fun ManualAddDialog(
     var structureName by remember { mutableStateOf("") }
     var targetLevelString by remember { mutableStateOf("") }
     
+    val context = LocalContext.current
+    val suggestions = remember(structureName) {
+        if (structureName.isBlank()) emptyList()
+        else JsonParser.getAutofillSuggestions(context.assets, structureName)
+    }
+    
     // Duration selectors
     var days by remember { mutableStateOf("0") }
     var hours by remember { mutableStateOf("0") }
@@ -942,6 +993,46 @@ fun ManualAddDialog(
                         .fillMaxWidth()
                         .testTag("manual_structure_input")
                 )
+
+                if (suggestions.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(ClashSlateLight)
+                            .border(1.dp, ClashGold.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                    ) {
+                        suggestions.forEachIndexed { index, suggestion ->
+                            if (index > 0) {
+                                Divider(color = ClashSlate.copy(alpha = 0.5f), thickness = 1.dp)
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { 
+                                        structureName = suggestion
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Suggestion",
+                                    tint = ClashGold.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = suggestion,
+                                    color = ClashGoldLight,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.testTag("autofill_suggestion_$suggestion")
+                                )
+                            }
+                        }
+                    }
+                }
 
                 // Level input
                 OutlinedTextField(
