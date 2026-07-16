@@ -155,6 +155,37 @@ class ClashViewModel(
         }
     }
 
+    fun deleteMultipleUpgrades(upgrades: List<UpgradeEntity>) {
+        viewModelScope.launch {
+            upgrades.forEach { upgrade ->
+                val id = upgrade.id
+                val wasLiveTracking = upgrade.isLiveTracking
+                
+                repository.deleteUpgradeById(id)
+                
+                // Explicitly dismiss any live notification progress bar directly
+                try {
+                    val notificationManager = getApplication<Application>().getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                    notificationManager.cancel(id + 10000)
+                } catch (e: Exception) {
+                    Log.e("ClashViewModel", "Error directly cancelling notification", e)
+                }
+
+                if (wasLiveTracking) {
+                    try {
+                        val intent = Intent(getApplication(), LiveProgressService::class.java).apply {
+                            action = "STOP_TRACKING"
+                            putExtra("upgrade_id", id)
+                        }
+                        startTrackingService(intent)
+                    } catch (e: Exception) {
+                        Log.e("ClashViewModel", "Error starting service for stop tracking", e)
+                    }
+                }
+            }
+        }
+    }
+
     private fun startTrackingService(intent: Intent) {
         val app = getApplication<Application>()
         try {
