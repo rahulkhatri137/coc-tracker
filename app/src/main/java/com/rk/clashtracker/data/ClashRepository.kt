@@ -57,6 +57,19 @@ class ClashRepository(
         return clashDao.getUpgradeById(id)
     }
 
+    suspend fun clearUpgradesForAccount(tag: String) {
+        val upgrades = clashDao.getUpgradesForAccount(tag)
+        upgrades.forEach { upgrade ->
+            UpgradeScheduler.cancelAlarm(context, upgrade.id)
+            try {
+                val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                notificationManager.cancel(upgrade.id + 10000)
+            } catch (e: Exception) {
+            }
+        }
+        clashDao.deleteUpgradesForAccount(tag)
+    }
+
     suspend fun deleteUpgradeById(id: Int) {
         UpgradeScheduler.cancelAlarm(context, id)
         clashDao.deleteUpgradeById(id)
