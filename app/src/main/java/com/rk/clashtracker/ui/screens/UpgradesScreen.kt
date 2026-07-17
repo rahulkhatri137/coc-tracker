@@ -56,6 +56,11 @@ fun UpgradesScreen(
     val accounts by viewModel.accounts.collectAsState()
     val upgrades by viewModel.upgrades.collectAsState()
     val parseState by viewModel.parseState.collectAsState()
+    val defaultAccountTag by viewModel.defaultAccountTag.collectAsState()
+
+    val accountNamesMap = remember(accounts) {
+        accounts.associate { it.tag to it.name }
+    }
 
     var selectedAccountTag by remember { mutableStateOf("All") }
     var showFilterDropdown by remember { mutableStateOf(false) }
@@ -91,9 +96,9 @@ fun UpgradesScreen(
             Text(
                 text = "Upgrade Planner",
                 color = ClashGold,
-                fontSize = 18.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp)
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp)
             )
 
             // Profile Filter
@@ -378,7 +383,9 @@ fun UpgradesScreen(
                         .fillMaxWidth()
                 ) {
                     items(currentTabUpgrades, key = { it.id }) { upgrade ->
-                        val accountName = accounts.find { it.tag == upgrade.accountTag }?.name ?: upgrade.accountTag
+                        val accountName = remember(accountNamesMap, upgrade.accountTag) {
+                            accountNamesMap[upgrade.accountTag] ?: upgrade.accountTag
+                        }
                         UpgradeItem(
                             upgrade = upgrade,
                             accountName = accountName,
@@ -458,6 +465,7 @@ fun UpgradesScreen(
         if (showAddManualDialog) {
             ManualAddDialog(
                 accounts = accounts,
+                defaultAccountTag = defaultAccountTag,
                 onDismiss = { showAddManualDialog = false },
                 onAdd = { accountTag, name, level, seconds ->
                     viewModel.addUpgrade(accountTag, name, level, seconds)
@@ -484,6 +492,7 @@ fun UpgradesScreen(
             ReviewImportDialog(
                 accounts = accounts,
                 parseState = parseState,
+                defaultAccountTag = defaultAccountTag,
                 onDismiss = {
                     viewModel.resetParseState()
                     showImportScreenshotDialog = false
@@ -549,6 +558,7 @@ fun UpgradesScreen(
                 accounts = accounts,
                 upgrades = upgrades,
                 initialSelectedAccount = selectedAccountTag,
+                defaultAccountTag = defaultAccountTag,
                 onDismiss = { showPotionBoostDialog = false },
                 onApplyBoost = { accountTag, potionType ->
                     viewModel.applyPotionBoost(accountTag, potionType)
@@ -574,19 +584,9 @@ fun UpgradesScreen(
 @Composable
 fun LiveTimerText(
     upgrade: UpgradeEntity,
+    currentTime: Long,
     modifier: Modifier = Modifier
 ) {
-    var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
-
-    LaunchedEffect(upgrade.isCompleted, upgrade.endTime) {
-        if (!upgrade.isCompleted && upgrade.endTime > System.currentTimeMillis()) {
-            while (true) {
-                delay(1000)
-                currentTime = System.currentTimeMillis()
-            }
-        }
-    }
-
     val remainingSeconds = remember(upgrade, currentTime) {
         val remainingMs = upgrade.endTime - currentTime
         (remainingMs / 1000).coerceAtLeast(0)
@@ -613,20 +613,10 @@ fun LiveTimerText(
 @Composable
 fun LiveProgressBar(
     upgrade: UpgradeEntity,
+    currentTime: Long,
     modifier: Modifier = Modifier
 ) {
     if (!upgrade.isCompleted) {
-        var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
-
-        LaunchedEffect(upgrade.startTime, upgrade.endTime) {
-            if (upgrade.endTime > System.currentTimeMillis()) {
-                while (true) {
-                    delay(1000)
-                    currentTime = System.currentTimeMillis()
-                }
-            }
-        }
-
         val progress = remember(upgrade, currentTime) {
             if (upgrade.durationSeconds <= 0) 1f
             else {
@@ -662,6 +652,35 @@ fun UpgradeItem(
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
 
+    var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(upgrade.isCompleted, upgrade.endTime) {
+        if (!upgrade.isCompleted && upgrade.endTime > System.currentTimeMillis()) {
+            while (true) {
+                delay(1000)
+                currentTime = System.currentTimeMillis()
+            }
+        }
+    }
+
+    val isTh = upgrade.villageType == "Town Hall"
+    val villageBg = if (isTh) Color(0xFF1E3A8A).copy(alpha = 0.25f) else Color(0xFF065F46).copy(alpha = 0.25f)
+    val villageTextCol = if (isTh) Color(0xFF93C5FD) else Color(0xFF6EE7B7)
+
+    val categoryBg = when (upgrade.categoryType) {
+        "Building" -> Color(0xFF78350F).copy(alpha = 0.25f)
+        "Hero" -> Color(0xFF6B21A8).copy(alpha = 0.25f)
+        "Pet" -> Color(0xFF3730A3).copy(alpha = 0.25f)
+        "Troop" -> Color(0xFF831843).copy(alpha = 0.25f)
+        else -> Color(0xFF4B5563).copy(alpha = 0.25f)
+    }
+    val categoryTextCol = when (upgrade.categoryType) {
+        "Building" -> Color(0xFFFDE68A)
+        "Hero" -> Color(0xFFE9D5FF)
+        "Pet" -> Color(0xFFC7D2FE)
+        "Troop" -> Color(0xFFFBCFE8)
+        else -> Color(0xFFD1D5DB)
+    }
+
     Card(
         colors = CardDefaults.cardColors(
             containerColor = if (upgrade.isCompleted) ClashSlateLight.copy(alpha = 0.5f) else ClashSlate
@@ -686,7 +705,7 @@ fun UpgradeItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+                .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (isSelectionMode) {
@@ -699,13 +718,13 @@ fun UpgradeItem(
                         checkmarkColor = Color.Black
                     ),
                     modifier = Modifier
-                        .padding(end = 8.dp)
+                        .padding(end = 10.dp)
                         .testTag("checkbox_${upgrade.id}")
                 )
             }
 
             Column(modifier = Modifier.weight(1f)) {
-                // Header: Nickname tag + completion button
+                // Header: Nickname tag + completion buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -714,31 +733,31 @@ fun UpgradeItem(
                     // Account tag badge
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(RoundedCornerShape(6.dp))
                             .background(ClashWood)
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = accountName,
                             color = ClashGoldLight,
-                            fontSize = 9.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
 
                     if (!isSelectionMode) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             // Manual Live Tracking Notification Toggle (if active)
                             if (!upgrade.isCompleted) {
                                 IconButton(
                                     onClick = onToggleLiveTracking,
-                                    modifier = Modifier.size(26.dp).testTag("live_tracking_btn_${upgrade.id}")
+                                    modifier = Modifier.size(52.dp).testTag("live_tracking_btn_${upgrade.id}")
                                 ) {
                                     Icon(
                                         imageVector = if (upgrade.isLiveTracking) Icons.Default.NotificationsActive else Icons.Default.NotificationsNone,
                                         contentDescription = "Live Notification Progress Tracker",
                                         tint = if (upgrade.isLiveTracking) ClashGold else TextSecondary,
-                                        modifier = Modifier.size(14.dp)
+                                        modifier = Modifier.size(30.dp)
                                     )
                                 }
                             }
@@ -746,110 +765,112 @@ fun UpgradeItem(
                             // Edit button
                             IconButton(
                                 onClick = { showEditDialog = true },
-                                modifier = Modifier.size(26.dp).testTag("edit_upgrade_btn_${upgrade.id}")
+                                modifier = Modifier.size(52.dp).testTag("edit_upgrade_btn_${upgrade.id}")
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Edit,
                                     contentDescription = "Edit Upgrade",
                                     tint = ClashGoldLight,
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(30.dp)
                                 )
                             }
 
                             // Quick Complete Switch/Button
                             IconButton(
                                 onClick = onToggleComplete,
-                                modifier = Modifier.size(26.dp).testTag("complete_toggle_btn_${upgrade.id}")
+                                modifier = Modifier.size(52.dp).testTag("complete_toggle_btn_${upgrade.id}")
                             ) {
                                 Icon(
                                     imageVector = if (upgrade.isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
                                     contentDescription = "Complete Toggle",
                                     tint = if (upgrade.isCompleted) Color(0xFF4CAF50) else TextSecondary,
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(30.dp)
                                 )
                             }
 
                             // Delete button
                             IconButton(
                                 onClick = onDelete,
-                                modifier = Modifier.size(26.dp).testTag("delete_upgrade_btn_${upgrade.id}")
+                                modifier = Modifier.size(52.dp).testTag("delete_upgrade_btn_${upgrade.id}")
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Delete,
                                     contentDescription = "Delete",
                                     tint = Color(0xFFEF5350).copy(alpha = 0.8f),
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(30.dp)
                                 )
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
-                // Body: Structure name & target level
-                val levelText = if (upgrade.targetLevel != null && upgrade.targetLevel > 0) " (Lvl ${upgrade.targetLevel})" else ""
-                Text(
-                    text = "${upgrade.structureName}$levelText",
-                    color = if (upgrade.isCompleted) TextSecondary else TextPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleMedium
-                )
-
+                // Body: Structure name & target level and Village & Category chips
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Village Tag (Town Hall or Builder Hall)
-                    val isTh = upgrade.villageType == "Town Hall"
-                    val villageBg = if (isTh) Color(0xFF1E3A8A).copy(alpha = 0.25f) else Color(0xFF065F46).copy(alpha = 0.25f)
-                    val villageTextCol = if (isTh) Color(0xFF93C5FD) else Color(0xFF6EE7B7)
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(villageBg)
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
-                    ) {
-                        Text(
-                            text = upgrade.villageType,
-                            color = villageTextCol,
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    Text(
+                        text = upgrade.structureName,
+                        color = if (upgrade.isCompleted) TextSecondary else TextPrimary,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                    // Category Tag (Building, Hero, Pet, Troop)
-                    val categoryBg = when (upgrade.categoryType) {
-                        "Building" -> Color(0xFF78350F).copy(alpha = 0.25f)
-                        "Hero" -> Color(0xFF6B21A8).copy(alpha = 0.25f)
-                        "Pet" -> Color(0xFF3730A3).copy(alpha = 0.25f)
-                        "Troop" -> Color(0xFF831843).copy(alpha = 0.25f)
-                        else -> Color(0xFF4B5563).copy(alpha = 0.25f)
-                    }
-                    val categoryTextCol = when (upgrade.categoryType) {
-                        "Building" -> Color(0xFFFDE68A)
-                        "Hero" -> Color(0xFFE9D5FF)
-                        "Pet" -> Color(0xFFC7D2FE)
-                        "Troop" -> Color(0xFFFBCFE8)
-                        else -> Color(0xFFD1D5DB)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(categoryBg)
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = upgrade.categoryType,
-                            color = categoryTextCol,
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        // Village Tag (Town Hall or Builder Hall)
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(villageBg)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = upgrade.villageType,
+                                color = villageTextCol,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        // Category Tag (Building, Hero, Pet, Troop)
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(categoryBg)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = upgrade.categoryType,
+                                color = categoryTextCol,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(2.dp))
+                if (upgrade.targetLevel != null && upgrade.targetLevel > 0) {
+                    Text(
+                        text = "Level ${upgrade.targetLevel}",
+                        color = TextSecondary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -859,15 +880,16 @@ fun UpgradeItem(
                     Text(
                         text = if (upgrade.isCompleted) "Status" else "Time Left",
                         color = TextSecondary,
-                        fontSize = 11.sp
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
                     )
-                    LiveTimerText(upgrade = upgrade)
+                    LiveTimerText(upgrade = upgrade, currentTime = currentTime)
                 }
 
                 // Material 3 Live Progress Indicator (if active)
                 if (!upgrade.isCompleted) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    LiveProgressBar(upgrade = upgrade)
+                    LiveProgressBar(upgrade = upgrade, currentTime = currentTime)
                 }
             }
         }
@@ -1029,10 +1051,18 @@ fun EditUpgradeDialog(
 @Composable
 fun ManualAddDialog(
     accounts: List<AccountEntity>,
+    defaultAccountTag: String = "",
     onDismiss: () -> Unit,
     onAdd: (accountTag: String, name: String, targetLevel: Int?, durationSeconds: Long) -> Unit
 ) {
-    var selectedAccount by remember { mutableStateOf(accounts.firstOrNull()?.tag ?: "") }
+    val initialAccount = remember(defaultAccountTag, accounts) {
+        if (defaultAccountTag.isNotEmpty() && accounts.any { it.tag == defaultAccountTag }) {
+            defaultAccountTag
+        } else {
+            accounts.firstOrNull()?.tag ?: ""
+        }
+    }
+    var selectedAccount by remember(initialAccount) { mutableStateOf(initialAccount) }
     var structureName by remember { mutableStateOf("") }
     var targetLevelString by remember { mutableStateOf("") }
     
@@ -1311,10 +1341,18 @@ fun ImportJsonDialog(
 fun ReviewImportDialog(
     accounts: List<AccountEntity>,
     parseState: ParseState,
+    defaultAccountTag: String = "",
     onDismiss: () -> Unit,
     onConfirmImport: (accountTag: String, selectedUpgrades: List<JsonParser.ExtractedUpgrade>) -> Unit
 ) {
-    var selectedAccount by remember { mutableStateOf(accounts.firstOrNull()?.tag ?: "") }
+    val initialAccount = remember(defaultAccountTag, accounts) {
+        if (defaultAccountTag.isNotEmpty() && accounts.any { it.tag == defaultAccountTag }) {
+            defaultAccountTag
+        } else {
+            accounts.firstOrNull()?.tag ?: ""
+        }
+    }
+    var selectedAccount by remember(initialAccount) { mutableStateOf(initialAccount) }
     var dropdownExpanded by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -1494,6 +1532,7 @@ fun PotionBoostDialog(
     accounts: List<AccountEntity>,
     upgrades: List<UpgradeEntity>,
     initialSelectedAccount: String,
+    defaultAccountTag: String = "",
     onDismiss: () -> Unit,
     onApplyBoost: (accountTag: String, potionType: String) -> Unit,
     onApplyHelperBoost: (upgradeId: Int, hours: Int) -> Unit
@@ -1506,9 +1545,14 @@ fun PotionBoostDialog(
         }
     }
 
-    val initialAccount = remember(accountsWithOngoingUpgrades) {
-        if (initialSelectedAccount == "All") "All"
-        else if (accountsWithOngoingUpgrades.any { it.tag == initialSelectedAccount }) initialSelectedAccount
+    val initialAccount = remember(accountsWithOngoingUpgrades, initialSelectedAccount, defaultAccountTag) {
+        val prefAccount = if (defaultAccountTag.isNotEmpty() && accounts.any { it.tag == defaultAccountTag }) {
+            defaultAccountTag
+        } else {
+            initialSelectedAccount
+        }
+        if (prefAccount == "All") "All"
+        else if (accountsWithOngoingUpgrades.any { it.tag == prefAccount }) prefAccount
         else if (accountsWithOngoingUpgrades.isNotEmpty()) accountsWithOngoingUpgrades.first().tag
         else "All"
     }

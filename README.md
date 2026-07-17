@@ -13,7 +13,9 @@ Track Clash of Clans upgrades across multiple accounts, estimate completion time
 *   **"Next Builder" Visual Highlights**: Automatically scans your active timers to highlight which village and upgrade will complete next.
 *   **Smart Auto-Fill Feature**: When typing a structure's name in either the manual upgrade addition or modification dialogs, the app now shows suggestions based on mapping names.
 *   **Multi-Select & Bulk Deletion Engine**: Selection mode, presenting intuitive checkable states for each upgrade card to delete entries.
-*   **Note**: Doesn't support Helpers and Potions currently but can be planned for future updates.
+*   **Stored Village & Category Classifications**: villageType and categoryType fields to store upgrades classifications.
+*   **Potion Boost Controls**: Integrate boosts from Builder Potion, Research Potion, Pet Potion for Town Hall village upgrades.
+*   **Helper Boost**: applyHelperBoost to reduce upgrade duration by a specific number of hours.
 
 ---
 
@@ -34,6 +36,9 @@ Track Clash of Clans upgrades across multiple accounts, estimate completion time
 <img src="screenshots/04.png" width="30%" />
 <img src="screenshots/05.png" width="30%" />
 <img src="screenshots/06.png" width="30%" />
+<img src="screenshots/07.png" width="30%" />
+<img src="screenshots/08.png" width="30%" />
+<img src="screenshots/09.png" width="30%" />
 </div>
 
 ---

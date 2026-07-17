@@ -16,6 +16,7 @@ import com.rk.clashtracker.data.ClashDatabase
 import com.rk.clashtracker.data.UpgradeEntity
 import com.rk.clashtracker.data.formatSecondsToDuration
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collectLatest
 
 class LiveProgressService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -41,11 +42,9 @@ class LiveProgressService : Service() {
             e.printStackTrace()
         }
 
-        if (action == "START_TRACKING" || action == "REFRESH" || action == "NOTIFICATION_DISMISSED") {
-            startTrackingLoop()
-        } else if (action == "STOP_TRACKING") {
-            val upgradeId = intent.getIntExtra("upgrade_id", -1)
-            if (upgradeId != -1) {
+        if (action == "START_TRACKING" || action == "REFRESH" || action == "NOTIFICATION_DISMISSED" || action == "STOP_TRACKING") {
+            val upgradeId = intent?.getIntExtra("upgrade_id", -1) ?: -1
+            if (action == "STOP_TRACKING" && upgradeId != -1) {
                 cancelNotificationForUpgrade(upgradeId)
             }
             startTrackingLoop()
@@ -62,53 +61,63 @@ class LiveProgressService : Service() {
             val dao = db.clashDao()
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-            while (isActive) {
-                val liveUpgrades = dao.getLiveTrackingUpgrades()
-
+            dao.getLiveTrackingUpgradesFlow().collectLatest { liveUpgrades ->
                 if (liveUpgrades.isEmpty()) {
                     stopForeground(true)
                     stopSelf()
-                    break
+                    return@collectLatest
                 }
 
-                liveUpgrades.forEach { upgrade ->
-                    val remaining = upgrade.remainingSeconds
-                    if (remaining <= 0) {
-                        UpgradeScheduler.showNotification(
-                            applicationContext,
-                            notificationManager,
-                            upgrade.id,
-                            upgrade.accountTag,
-                            upgrade.structureName,
-                            upgrade.targetLevel ?: -1
-                        )
-                        dao.updateUpgrade(
-                            upgrade.copy(
+                while (isActive) {
+                    var listChanged = false
+                    val updatedList = liveUpgrades.map { upgrade ->
+                        val remaining = upgrade.remainingSeconds
+                        if (remaining <= 0) {
+                            UpgradeScheduler.showNotification(
+                                applicationContext,
+                                notificationManager,
+                                upgrade.id,
+                                upgrade.accountTag,
+                                upgrade.structureName,
+                                upgrade.targetLevel ?: -1
+                            )
+                            val completedUpgrade = upgrade.copy(
                                 isCompleted = true,
                                 isLiveTracking = false,
                                 notificationTriggered = true
                             )
-                        )
-                        cancelNotificationForUpgrade(upgrade.id)
+                            // Perform database update in an IO block
+                            launch(Dispatchers.IO) {
+                                dao.updateUpgrade(completedUpgrade)
+                            }
+                            cancelNotificationForUpgrade(upgrade.id)
+                            listChanged = true
+                            completedUpgrade
+                        } else {
+                            upgrade
+                        }
                     }
-                }
 
-                val currentLiveUpgrades = dao.getLiveTrackingUpgrades()
-                updateNotifications(currentLiveUpgrades, notificationManager)
+                    if (listChanged) {
+                        break
+                    }
 
-                if (currentLiveUpgrades.isEmpty()) {
-                    break
-                }
+                    val activeTracking = updatedList.filter { !it.isCompleted }
+                    if (activeTracking.isEmpty()) {
+                        break
+                    }
 
-                // Dynamically adjust tick rate based on remaining time of the closest upgrade to optimize battery/memory
-                val minRemaining = currentLiveUpgrades.minOfOrNull { it.remainingSeconds } ?: 0L
-                val delayMs = when {
-                    minRemaining < 60 -> 5000L
-                    minRemaining < 3600 -> 30000L
-                    minRemaining < 43200 -> 300000L
-                    else -> 900000L
+                    updateNotifications(activeTracking, notificationManager)
+
+                    val minRemaining = activeTracking.minOfOrNull { it.remainingSeconds } ?: 0L
+                    val delayMs = when {
+                        minRemaining < 60 -> 2000L      // fast tick close to finished
+                        minRemaining < 3600 -> 10000L    // 10s tick under 1 hour
+                        minRemaining < 43200 -> 30000L   // 30s tick under 12 hours
+                        else -> 60000L                  // 1m tick for long ones
+                    }
+                    delay(delayMs)
                 }
-                delay(delayMs)
             }
         }
     }
@@ -120,23 +129,8 @@ class LiveProgressService : Service() {
             return
         }
 
-        val firstUpgrade = liveUpgrades[0]
-        val firstNotification = buildProgressNotification(firstUpgrade)
-        val firstNotificationId = firstUpgrade.id + 10000
-
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(firstNotificationId, firstNotification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-            } else {
-                startForeground(firstNotificationId, firstNotification)
-            }
-            notificationManager.cancel(FOREGROUND_NOTIFICATION_ID)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        for (i in 1 until liveUpgrades.size) {
-            val upgrade = liveUpgrades[i]
+        // Show all live upgrades as normal notifications with their respective progress
+        liveUpgrades.forEach { upgrade ->
             val notification = buildProgressNotification(upgrade)
             try {
                 notificationManager.notify(upgrade.id + 10000, notification)
@@ -148,7 +142,13 @@ class LiveProgressService : Service() {
 
     private fun createServiceNotification(activeCount: Int): Notification {
         val title = "🔨 Clash Upgrade Tracker"
-        val text = "Service active. Starting tracking..."
+        val text = if (activeCount <= 0) {
+            "Service active. Starting tracking..."
+        } else if (activeCount == 1) {
+            "Tracking 1 active upgrade live..."
+        } else {
+            "Tracking $activeCount active upgrades live..."
+        }
         val appIconLarge = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
 
         return NotificationCompat.Builder(this, UpgradeScheduler.LIVE_CHANNEL_ID)

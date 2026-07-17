@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
@@ -91,10 +92,10 @@ fun AccountsScreen(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
-
+ 
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.weight(1f)
                 ) {
                     items(accounts, key = { it.tag }) { account ->
                         AccountItem(
@@ -104,9 +105,16 @@ fun AccountsScreen(
                         )
                     }
                     item {
-                        Spacer(modifier = Modifier.height(80.dp)) // padding for FAB
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
+
+                DefaultProfileSelector(
+                    viewModel = viewModel,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                )
             }
 
             FloatingActionButton(
@@ -115,7 +123,7 @@ fun AccountsScreen(
                 contentColor = Color.Black,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(bottom = 16.dp, end = 16.dp)
+                    .padding(bottom = 120.dp, end = 16.dp)
                     .testTag("add_account_fab")
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Account")
@@ -312,6 +320,7 @@ fun EditAccountDialog(
                         cursorColor = ClashGold
                     ),
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("edit_account_name_input")
@@ -427,6 +436,7 @@ fun AddAccountDialog(
                         cursorColor = ClashGold
                     ),
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("account_name_input")
@@ -485,4 +495,109 @@ fun AddAccountDialog(
         },
         containerColor = ClashSlate
     )
+}
+
+@Composable
+fun DefaultProfileSelector(
+    viewModel: ClashViewModel,
+    modifier: Modifier = Modifier
+) {
+    val accounts by viewModel.accounts.collectAsState()
+    val defaultAccountTag by viewModel.defaultAccountTag.collectAsState()
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = ClashSlate),
+        modifier = modifier.fillMaxWidth(),
+        border = androidx.compose.foundation.BorderStroke(1.dp, ClashBronze.copy(alpha = 0.4f)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text("👑", fontSize = 16.sp)
+                Text(
+                    text = "Default Profile Settings",
+                    color = ClashGoldLight,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Box(modifier = Modifier.fillMaxWidth()) {
+                val currentDefaultName = if (defaultAccountTag.isEmpty()) {
+                    "No Default (Select First Available)"
+                } else {
+                    accounts.find { it.tag == defaultAccountTag }?.name ?: "No Default (Select First Available)"
+                }
+
+                OutlinedButton(
+                    onClick = { dropdownExpanded = true },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                    modifier = Modifier.fillMaxWidth().height(38.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            currentDefaultName,
+                            fontSize = 11.sp,
+                            color = TextPrimary
+                        )
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Default.ArrowDropDown,
+                            contentDescription = null,
+                            tint = ClashGold,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                DropdownMenu(
+                    expanded = dropdownExpanded,
+                    onDismissRequest = { dropdownExpanded = false },
+                    modifier = Modifier
+                        .background(ClashSlate)
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                "No Default (Select First Available)",
+                                color = TextPrimary,
+                                fontSize = 12.sp
+                            )
+                        },
+                        onClick = {
+                            viewModel.setDefaultAccountTag("")
+                            dropdownExpanded = false
+                        }
+                    )
+                    accounts.forEach { account ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "${account.name} (${account.tag})",
+                                    color = TextPrimary,
+                                    fontSize = 12.sp
+                                )
+                            },
+                            onClick = {
+                                viewModel.setDefaultAccountTag(account.tag)
+                                dropdownExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
 }

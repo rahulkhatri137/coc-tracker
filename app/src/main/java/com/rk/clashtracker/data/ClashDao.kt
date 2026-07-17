@@ -34,6 +34,9 @@ interface ClashDao {
     @Query("SELECT * FROM upgrades WHERE isCompleted = 0 AND isLiveTracking = 1")
     suspend fun getLiveTrackingUpgrades(): List<UpgradeEntity>
 
+    @Query("SELECT * FROM upgrades WHERE isCompleted = 0 AND isLiveTracking = 1")
+    fun getLiveTrackingUpgradesFlow(): Flow<List<UpgradeEntity>>
+
     @Query("SELECT * FROM upgrades WHERE id = :id LIMIT 1")
     suspend fun getUpgradeById(id: Int): UpgradeEntity?
 

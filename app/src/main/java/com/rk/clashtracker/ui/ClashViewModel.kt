@@ -49,6 +49,16 @@ class ClashViewModel(
     private val _parseState = MutableStateFlow<ParseState>(ParseState.Idle)
     val parseState: StateFlow<ParseState> = _parseState.asStateFlow()
 
+    private val sharedPrefs = application.getSharedPreferences("clash_tracker_prefs", android.content.Context.MODE_PRIVATE)
+    
+    private val _defaultAccountTag = MutableStateFlow(sharedPrefs.getString("default_account_tag", "") ?: "")
+    val defaultAccountTag: StateFlow<String> = _defaultAccountTag.asStateFlow()
+
+    fun setDefaultAccountTag(tag: String) {
+        sharedPrefs.edit().putString("default_account_tag", tag).apply()
+        _defaultAccountTag.value = tag
+    }
+
     init {
         // Run a sync-check to see if any upgrades completed while the app was closed
         viewModelScope.launch {
@@ -56,6 +66,51 @@ class ClashViewModel(
                 UpgradeScheduler.checkAndNotifyCompletedUpgrades(application)
             } catch (e: Exception) {
                 Log.e("ClashViewModel", "Error running startup completion checks", e)
+            }
+        }
+
+        // Keep alarms and notifications synchronized with the database state
+        viewModelScope.launch {
+            try {
+                repository.allUpgrades.collect { upgradesList ->
+                    try {
+                        val context = getApplication<Application>()
+                        val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                        
+                        // 1. Get previously known upgrade IDs
+                        val sharedPrefs = context.getSharedPreferences("clash_tracker_prefs", android.content.Context.MODE_PRIVATE)
+                        val knownIdsStr = sharedPrefs.getStringSet("known_upgrade_ids", emptySet()) ?: emptySet()
+                        val knownIds = knownIdsStr.mapNotNull { it.toIntOrNull() }.toSet()
+                        
+                        // 2. Get current upgrade IDs from the database
+                        val dbIds = upgradesList.map { it.id }.toSet()
+                        
+                        // 3. Any ID that was known but is no longer in the DB has been deleted!
+                        val deletedIds = knownIds - dbIds
+                        deletedIds.forEach { id ->
+                            Log.d("ClashViewModel", "Sync: Upgrade #$id deleted, cancelling alarm and notifications")
+                            UpgradeScheduler.cancelAlarm(context, id)
+                            notificationManager.cancel(id)
+                            notificationManager.cancel(id + 10000)
+                        }
+                        
+                        // 4. Any ID that is in the DB but is completed, cancel its scheduled alarm and live notification
+                        upgradesList.forEach { upgrade ->
+                            if (upgrade.isCompleted) {
+                                UpgradeScheduler.cancelAlarm(context, upgrade.id)
+                                notificationManager.cancel(upgrade.id + 10000)
+                            }
+                        }
+                        
+                        // 5. Update the stored known IDs
+                        val newKnownIdsStr = dbIds.map { it.toString() }.toSet()
+                        sharedPrefs.edit().putStringSet("known_upgrade_ids", newKnownIdsStr).apply()
+                    } catch (e: Exception) {
+                        Log.e("ClashViewModel", "Error synchronizing alarms and notifications", e)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ClashViewModel", "Error collecting upgrades for sync", e)
             }
         }
     }
@@ -314,6 +369,9 @@ class ClashViewModel(
                 upgrade.categoryType in affectedCategoryTypes
             }
 
+            val context = getApplication<Application>()
+            val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+
             for (upgrade in currentUpgrades) {
                 val remainingMs = upgrade.endTime - System.currentTimeMillis()
                 val remainingSeconds = (remainingMs / 1000).coerceAtLeast(0)
@@ -321,9 +379,31 @@ class ClashViewModel(
                 if (remainingSeconds <= secondsToDeduct) {
                     val updated = upgrade.copy(
                         durationSeconds = upgrade.durationSeconds - remainingSeconds,
-                        isCompleted = true
+                        isCompleted = true,
+                        isLiveTracking = false
                     )
                     repository.updateUpgrade(updated)
+
+                    // Trigger finished notification
+                    try {
+                        UpgradeScheduler.showNotification(
+                            context = context,
+                            notificationManager = notificationManager,
+                            id = upgrade.id,
+                            accountTag = upgrade.accountTag,
+                            structureName = upgrade.structureName,
+                            targetLevel = upgrade.targetLevel ?: -1
+                        )
+                        if (upgrade.isLiveTracking) {
+                            val intent = Intent(context, LiveProgressService::class.java).apply {
+                                action = "STOP_TRACKING"
+                                putExtra("upgrade_id", upgrade.id)
+                            }
+                            startTrackingService(intent)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("ClashViewModel", "Error triggering potion completed notification", e)
+                    }
                 } else {
                     val updated = upgrade.copy(
                         durationSeconds = upgrade.durationSeconds - secondsToDeduct,
@@ -342,12 +422,37 @@ class ClashViewModel(
             val remainingMs = upgrade.endTime - System.currentTimeMillis()
             val remainingSeconds = (remainingMs / 1000).coerceAtLeast(0)
 
+            val context = getApplication<Application>()
+            val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+
             if (remainingSeconds <= secondsToDeduct) {
                 val updated = upgrade.copy(
                     durationSeconds = upgrade.durationSeconds - remainingSeconds,
-                    isCompleted = true
+                    isCompleted = true,
+                    isLiveTracking = false
                 )
                 repository.updateUpgrade(updated)
+
+                // Trigger finished notification
+                try {
+                    UpgradeScheduler.showNotification(
+                        context = context,
+                        notificationManager = notificationManager,
+                        id = upgrade.id,
+                        accountTag = upgrade.accountTag,
+                        structureName = upgrade.structureName,
+                        targetLevel = upgrade.targetLevel ?: -1
+                    )
+                    if (upgrade.isLiveTracking) {
+                        val intent = Intent(context, LiveProgressService::class.java).apply {
+                            action = "STOP_TRACKING"
+                            putExtra("upgrade_id", upgrade.id)
+                        }
+                        startTrackingService(intent)
+                    }
+                } catch (e: Exception) {
+                    Log.e("ClashViewModel", "Error triggering helper completed notification", e)
+                }
             } else {
                 val updated = upgrade.copy(
                     durationSeconds = upgrade.durationSeconds - secondsToDeduct,
