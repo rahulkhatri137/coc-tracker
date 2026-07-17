@@ -291,6 +291,50 @@ class ClashViewModel(
         }
     }
 
+    fun applyPotionBoost(accountTag: String, potionType: String) {
+        viewModelScope.launch {
+            val affectedCategoryTypes = when (potionType) {
+                "Builder" -> listOf("Building", "Hero")
+                "Research" -> listOf("Troop")
+                "Pet" -> listOf("Pet")
+                else -> emptyList()
+            }
+            val secondsToDeduct = when (potionType) {
+                "Builder" -> 9L * 3600L // 9 hours
+                "Research", "Pet" -> 23L * 3600L // 23 hours
+                else -> 0L
+            }
+
+            if (affectedCategoryTypes.isEmpty() || secondsToDeduct == 0L) return@launch
+
+            val currentUpgrades = upgrades.value.filter { upgrade ->
+                !upgrade.isCompleted &&
+                upgrade.villageType == "Town Hall" &&
+                (accountTag == "All" || upgrade.accountTag == accountTag) &&
+                upgrade.categoryType in affectedCategoryTypes
+            }
+
+            for (upgrade in currentUpgrades) {
+                val remainingMs = upgrade.endTime - System.currentTimeMillis()
+                val remainingSeconds = (remainingMs / 1000).coerceAtLeast(0)
+                
+                if (remainingSeconds <= secondsToDeduct) {
+                    val updated = upgrade.copy(
+                        durationSeconds = upgrade.durationSeconds - remainingSeconds,
+                        isCompleted = true
+                    )
+                    repository.updateUpgrade(updated)
+                } else {
+                    val updated = upgrade.copy(
+                        durationSeconds = upgrade.durationSeconds - secondsToDeduct,
+                        isCompleted = false
+                    )
+                    repository.updateUpgrade(updated)
+                }
+            }
+        }
+    }
+
     class Factory(private val application: Application) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(ClashViewModel::class.java)) {

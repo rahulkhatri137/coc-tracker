@@ -6,6 +6,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,8 +23,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -57,6 +62,7 @@ fun UpgradesScreen(
     var showAddManualDialog by remember { mutableStateOf(false) }
     var showImportJsonDialog by remember { mutableStateOf(false) }
     var showImportScreenshotDialog by remember { mutableStateOf(false) }
+    var showPotionBoostDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
 
@@ -90,60 +96,85 @@ fun UpgradesScreen(
             )
 
             // Profile Filter
-            Box(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 8.dp)
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Button(
-                    onClick = { showFilterDropdown = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = ClashSlate),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(38.dp)
-                        .border(1.dp, ClashBronze.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
-                        .testTag("account_filter_button")
+                Box(
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    Button(
+                        onClick = { showFilterDropdown = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = ClashSlate),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(38.dp)
+                            .border(1.dp, ClashBronze.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                            .testTag("account_filter_button")
                     ) {
-                        Text(
-                            text = if (selectedAccountTag == "All") "Showing: All Profiles" else "Showing Profile: $selectedAccountTag",
-                            color = TextPrimary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (selectedAccountTag == "All") "Showing: All Profiles" else "Showing Profile: $selectedAccountTag",
+                                color = TextPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = ClashGold)
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = showFilterDropdown,
+                        onDismissRequest = { showFilterDropdown = false },
+                        modifier = Modifier.background(ClashSlate)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("All Profiles", color = TextPrimary) },
+                            onClick = {
+                                selectedAccountTag = "All"
+                                showFilterDropdown = false
+                            },
+                            modifier = Modifier.testTag("filter_option_all")
                         )
-                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = ClashGold)
+                        accounts.forEach { account ->
+                            DropdownMenuItem(
+                                text = { Text(account.name, color = TextPrimary) },
+                                onClick = {
+                                    selectedAccountTag = account.tag
+                                    showFilterDropdown = false
+                                },
+                                modifier = Modifier.testTag("filter_option_${account.tag}")
+                            )
+                        }
                     }
                 }
 
-                DropdownMenu(
-                    expanded = showFilterDropdown,
-                    onDismissRequest = { showFilterDropdown = false },
-                    modifier = Modifier.background(ClashSlate)
+                // Potion Boost dialog settings button
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(ClashSlate, RoundedCornerShape(8.dp))
+                        .border(1.dp, ClashBronze.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { showPotionBoostDialog = true }
+                        .testTag("potion_boost_settings_button"),
+                    contentAlignment = Alignment.Center
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("All Profiles", color = TextPrimary) },
-                        onClick = {
-                            selectedAccountTag = "All"
-                            showFilterDropdown = false
-                        },
-                        modifier = Modifier.testTag("filter_option_all")
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Potion Boost Settings",
+                        tint = ClashGold,
+                        modifier = Modifier.size(24.dp)
                     )
-                    accounts.forEach { account ->
-                        DropdownMenuItem(
-                            text = { Text(account.name, color = TextPrimary) },
-                            onClick = {
-                                selectedAccountTag = account.tag
-                                showFilterDropdown = false
-                            },
-                            modifier = Modifier.testTag("filter_option_${account.tag}")
-                        )
-                    }
                 }
             }
 
@@ -508,6 +539,26 @@ fun UpgradesScreen(
                     }
                 },
                 containerColor = ClashSlate
+            )
+        }
+
+        // Potion Boost Dialog
+        if (showPotionBoostDialog) {
+            PotionBoostDialog(
+                accounts = accounts,
+                initialSelectedAccount = selectedAccountTag,
+                onDismiss = { showPotionBoostDialog = false },
+                onApplyBoost = { accountTag, potionType ->
+                    viewModel.applyPotionBoost(accountTag, potionType)
+                    showPotionBoostDialog = false
+                    val name = when (potionType) {
+                        "Builder" -> "Builder Potion"
+                        "Research" -> "Research Potion"
+                        "Pet" -> "Pet Potion"
+                        else -> "Potion"
+                    }
+                    Toast.makeText(context, "$name applied!", Toast.LENGTH_SHORT).show()
+                }
             )
         }
     }
@@ -1428,4 +1479,334 @@ fun ReviewImportDialog(
         },
         containerColor = ClashSlate
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PotionBoostDialog(
+    accounts: List<AccountEntity>,
+    initialSelectedAccount: String,
+    onDismiss: () -> Unit,
+    onApplyBoost: (accountTag: String, potionType: String) -> Unit
+) {
+    var selectedAccount by remember { mutableStateOf(initialSelectedAccount) }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                PotionBottleIcon(color = ClashElixir, modifier = Modifier.size(24.dp))
+                Text(
+                    text = "Potion Boost Controls",
+                    color = ClashGold,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Boost Town Hall village upgrades by instantly skipping hours.",
+                    color = TextSecondary,
+                    fontSize = 12.sp
+                )
+
+                // Account Selection
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Target Profile",
+                        color = ClashGoldLight,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        val displayName = if (selectedAccount == "All") "All Profiles" else {
+                            accounts.find { it.tag == selectedAccount }?.name ?: selectedAccount
+                        }
+                        OutlinedButton(
+                            onClick = { dropdownExpanded = true },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(38.dp)
+                                .border(1.dp, ClashBronze.copy(alpha = 0.4f), RoundedCornerShape(8.dp)),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp)
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(displayName, fontSize = 12.sp)
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = ClashGold, modifier = Modifier.size(16.dp))
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = dropdownExpanded,
+                            onDismissRequest = { dropdownExpanded = false },
+                            modifier = Modifier.background(ClashSlate)
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("All Profiles", color = TextPrimary, fontSize = 12.sp) },
+                                onClick = {
+                                    selectedAccount = "All"
+                                    dropdownExpanded = false
+                                }
+                            )
+                            accounts.forEach { account ->
+                                DropdownMenuItem(
+                                    text = { Text(account.name, color = TextPrimary, fontSize = 12.sp) },
+                                    onClick = {
+                                        selectedAccount = account.tag
+                                        dropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Row Button: Builder Potion
+                val builderBlue = Color(0xFF29B6F6) // Clear ocean blue
+                Button(
+                    onClick = {
+                        onApplyBoost(selectedAccount, "Builder")
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClashSlateLight),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .border(1.dp, builderBlue.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        .testTag("builder_potion_btn")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(builderBlue.copy(alpha = 0.25f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("🔨", fontSize = 14.sp)
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Builder Potion",
+                                color = builderBlue,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Skips 9 hours for Buildings & Heroes",
+                                color = TextSecondary,
+                                fontSize = 10.sp
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(builderBlue.copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text("-9h", color = builderBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Row Button: Research Potion
+                Button(
+                    onClick = {
+                        onApplyBoost(selectedAccount, "Research")
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClashSlateLight),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .border(1.dp, ClashElixir.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                        .testTag("research_potion_btn")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(ClashElixir.copy(alpha = 0.25f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("🧪", fontSize = 14.sp)
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Research Potion",
+                                color = ClashElixirLight,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Skips 23 hours for Troops",
+                                color = TextSecondary,
+                                fontSize = 10.sp
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(ClashElixirLight.copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text("-23h", color = ClashElixirLight, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Row Button: Pet Potion
+                val petPotionGrey = Color(0xFFECEFF1) // Light pearlescent milky grey
+                Button(
+                    onClick = {
+                        onApplyBoost(selectedAccount, "Pet")
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClashSlateLight),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .border(1.dp, petPotionGrey.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                        .testTag("pet_potion_btn")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(petPotionGrey.copy(alpha = 0.25f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("🐾", fontSize = 14.sp)
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Pet Potion",
+                                color = petPotionGrey,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Skips 23 hours for Pets",
+                                color = TextSecondary,
+                                fontSize = 10.sp
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(petPotionGrey.copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text("-23h", color = petPotionGrey, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.testTag("close_potion_dialog_btn")
+            ) {
+                Text("Close", color = ClashGold)
+            }
+        },
+        containerColor = ClashSlate
+    )
+}
+
+@Composable
+fun PotionBottleIcon(
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier) {
+        val width = size.width
+        val height = size.height
+
+        // Cork / Wood Stopper
+        val corkPath = Path().apply {
+            moveTo(width * 0.4f, height * 0.05f)
+            lineTo(width * 0.6f, height * 0.05f)
+            lineTo(width * 0.58f, height * 0.2f)
+            lineTo(width * 0.42f, height * 0.2f)
+            close()
+        }
+        drawPath(corkPath, color = Color(0xFFD7CCC8)) // Tan wooden cork
+
+        // Neck of the bottle
+        val neckPath = Path().apply {
+            moveTo(width * 0.38f, height * 0.2f)
+            lineTo(width * 0.62f, height * 0.2f)
+            lineTo(width * 0.62f, height * 0.35f)
+            lineTo(width * 0.38f, height * 0.35f)
+            close()
+        }
+        drawPath(neckPath, color = Color.White.copy(alpha = 0.6f), style = Stroke(width = 1.5.dp.toPx()))
+
+        // Body of the glass bottle (flask style)
+        val bodyPath = Path().apply {
+            moveTo(width * 0.38f, height * 0.35f)
+            lineTo(width * 0.2f, height * 0.48f)
+            lineTo(width * 0.2f, height * 0.92f)
+            lineTo(width * 0.8f, height * 0.92f)
+            lineTo(width * 0.8f, height * 0.48f)
+            lineTo(width * 0.62f, height * 0.35f)
+            close()
+        }
+        // Draw liquid inside first
+        val liquidPath = Path().apply {
+            moveTo(width * 0.22f, height * 0.58f)
+            lineTo(width * 0.22f, height * 0.9f)
+            lineTo(width * 0.78f, height * 0.9f)
+            lineTo(width * 0.78f, height * 0.58f)
+            quadraticTo(width * 0.5f, height * 0.54f, width * 0.22f, height * 0.58f)
+            close()
+        }
+        drawPath(liquidPath, color = color.copy(alpha = 0.85f))
+
+        // Draw glass bottle outline
+        drawPath(bodyPath, color = Color.White.copy(alpha = 0.8f), style = Stroke(width = 2.dp.toPx()))
+
+        // Reflection highlight on the left
+        drawLine(
+            color = Color.White.copy(alpha = 0.5f),
+            start = Offset(width * 0.28f, height * 0.6f),
+            end = Offset(width * 0.28f, height * 0.85f),
+            strokeWidth = 1.5.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    }
 }
