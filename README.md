@@ -31,6 +31,9 @@ Track Clash of Clans upgrades across multiple accounts, estimate completion time
 <img src="screenshots/01.png" width="30%" />
 <img src="screenshots/02.png" width="30%" />
 <img src="screenshots/03.png" width="30%" />
+<img src="screenshots/04.png" width="30%" />
+<img src="screenshots/05.png" width="30%" />
+<img src="screenshots/06.png" width="30%" />
 </div>
 
 ---
