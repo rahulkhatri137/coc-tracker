@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rk.clashtracker.data.*
@@ -546,6 +547,7 @@ fun UpgradesScreen(
         if (showPotionBoostDialog) {
             PotionBoostDialog(
                 accounts = accounts,
+                upgrades = upgrades,
                 initialSelectedAccount = selectedAccountTag,
                 onDismiss = { showPotionBoostDialog = false },
                 onApplyBoost = { accountTag, potionType ->
@@ -558,6 +560,11 @@ fun UpgradesScreen(
                         else -> "Potion"
                     }
                     Toast.makeText(context, "$name applied!", Toast.LENGTH_SHORT).show()
+                },
+                onApplyHelperBoost = { upgradeId, hours ->
+                    viewModel.applyHelperBoost(upgradeId, hours)
+                    showPotionBoostDialog = false
+                    Toast.makeText(context, "Helper applied: $hours hours deducted!", Toast.LENGTH_SHORT).show()
                 }
             )
         }
@@ -1485,12 +1492,50 @@ fun ReviewImportDialog(
 @Composable
 fun PotionBoostDialog(
     accounts: List<AccountEntity>,
+    upgrades: List<UpgradeEntity>,
     initialSelectedAccount: String,
     onDismiss: () -> Unit,
-    onApplyBoost: (accountTag: String, potionType: String) -> Unit
+    onApplyBoost: (accountTag: String, potionType: String) -> Unit,
+    onApplyHelperBoost: (upgradeId: Int, hours: Int) -> Unit
 ) {
-    var selectedAccount by remember { mutableStateOf(initialSelectedAccount) }
+    val context = LocalContext.current
+
+    val accountsWithOngoingUpgrades = remember(accounts, upgrades) {
+        accounts.filter { account ->
+            upgrades.any { !it.isCompleted && it.accountTag == account.tag }
+        }
+    }
+
+    val initialAccount = remember(accountsWithOngoingUpgrades) {
+        if (initialSelectedAccount == "All") "All"
+        else if (accountsWithOngoingUpgrades.any { it.tag == initialSelectedAccount }) initialSelectedAccount
+        else if (accountsWithOngoingUpgrades.isNotEmpty()) accountsWithOngoingUpgrades.first().tag
+        else "All"
+    }
+    var selectedAccount by remember(initialAccount) { mutableStateOf(initialAccount) }
+
     var dropdownExpanded by remember { mutableStateOf(false) }
+    var showHelperDialog by remember { mutableStateOf(false) }
+
+    val tryApplyPotion = { potionType: String, affectedCategories: List<String> ->
+        val hasUpgrades = upgrades.any { upgrade ->
+            !upgrade.isCompleted &&
+            upgrade.villageType == "Town Hall" &&
+            (selectedAccount == "All" || upgrade.accountTag == selectedAccount) &&
+            upgrade.categoryType in affectedCategories
+        }
+        if (hasUpgrades) {
+            onApplyBoost(selectedAccount, potionType)
+        } else {
+            val label = when (potionType) {
+                "Builder" -> "ongoing Builder or Hero upgrades"
+                "Research" -> "ongoing Laboratory research"
+                "Pet" -> "ongoing Pet upgrades"
+                else -> "upgrades"
+            }
+            Toast.makeText(context, "No $label to boost for this profile!", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1563,7 +1608,7 @@ fun PotionBoostDialog(
                                     dropdownExpanded = false
                                 }
                             )
-                            accounts.forEach { account ->
+                            accountsWithOngoingUpgrades.forEach { account ->
                                 DropdownMenuItem(
                                     text = { Text(account.name, color = TextPrimary, fontSize = 12.sp) },
                                     onClick = {
@@ -1580,7 +1625,7 @@ fun PotionBoostDialog(
                 val builderBlue = Color(0xFF29B6F6) // Clear ocean blue
                 Button(
                     onClick = {
-                        onApplyBoost(selectedAccount, "Builder")
+                        tryApplyPotion("Builder", listOf("Building", "Hero"))
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ClashSlateLight),
                     shape = RoundedCornerShape(8.dp),
@@ -1632,7 +1677,7 @@ fun PotionBoostDialog(
                 // Row Button: Research Potion
                 Button(
                     onClick = {
-                        onApplyBoost(selectedAccount, "Research")
+                        tryApplyPotion("Research", listOf("Troop"))
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ClashSlateLight),
                     shape = RoundedCornerShape(8.dp),
@@ -1685,7 +1730,7 @@ fun PotionBoostDialog(
                 val petPotionGrey = Color(0xFFECEFF1) // Light pearlescent milky grey
                 Button(
                     onClick = {
-                        onApplyBoost(selectedAccount, "Pet")
+                        tryApplyPotion("Pet", listOf("Pet"))
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ClashSlateLight),
                     shape = RoundedCornerShape(8.dp),
@@ -1733,6 +1778,59 @@ fun PotionBoostDialog(
                         }
                     }
                 }
+
+                // Row Button: Helper (Joker)
+                val helperOrange = Color(0xFFFF9800) // Orange accent
+                Button(
+                    onClick = {
+                        showHelperDialog = true
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClashSlateLight),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .border(1.dp, helperOrange.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        .testTag("helper_boost_btn")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(helperOrange.copy(alpha = 0.25f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            HelperHutIcon(modifier = Modifier.size(20.dp))
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Helper Boost",
+                                color = helperOrange,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Deducts custom hours from a single ongoing upgrade",
+                                color = TextSecondary,
+                                fontSize = 10.sp
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(helperOrange.copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text("Helper", color = helperOrange, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
@@ -1745,6 +1843,21 @@ fun PotionBoostDialog(
         },
         containerColor = ClashSlate
     )
+
+    if (showHelperDialog) {
+        val ongoingUpgradesForSelectedAccount = upgrades.filter { upgrade ->
+            !upgrade.isCompleted && (selectedAccount == "All" || upgrade.accountTag == selectedAccount)
+        }
+        HelperDialog(
+            accounts = accounts,
+            ongoingUpgrades = ongoingUpgradesForSelectedAccount,
+            onDismiss = { showHelperDialog = false },
+            onProceed = { upgradeId, hours ->
+                onApplyHelperBoost(upgradeId, hours)
+                showHelperDialog = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -1805,6 +1918,356 @@ fun PotionBottleIcon(
             color = Color.White.copy(alpha = 0.5f),
             start = Offset(width * 0.28f, height * 0.6f),
             end = Offset(width * 0.28f, height * 0.85f),
+            strokeWidth = 1.5.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HelperDialog(
+    accounts: List<AccountEntity>,
+    ongoingUpgrades: List<UpgradeEntity>,
+    onDismiss: () -> Unit,
+    onProceed: (upgradeId: Int, hours: Int) -> Unit
+) {
+    var selectedUpgrade by remember { mutableStateOf<UpgradeEntity?>(ongoingUpgrades.firstOrNull()) }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+    var hoursSelected by remember { mutableFloatStateOf(8f) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                HelperHutIcon(modifier = Modifier.size(24.dp))
+                Text(
+                    text = "Configure Helper",
+                    color = Color(0xFFFF9800),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Select an ongoing upgrade and choose how many hours to skip.",
+                    color = TextSecondary,
+                    fontSize = 12.sp
+                )
+
+                if (ongoingUpgrades.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No ongoing upgrades found for this profile.",
+                            color = Color.Red.copy(alpha = 0.8f),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                } else {
+                    // Reset selected upgrade if it's not in the new list anymore
+                    LaunchedEffect(ongoingUpgrades) {
+                        if (selectedUpgrade == null || !ongoingUpgrades.any { it.id == selectedUpgrade?.id }) {
+                            selectedUpgrade = ongoingUpgrades.firstOrNull()
+                        }
+                    }
+
+                    // Upgrade Selector
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Target Upgrade",
+                            color = ClashGoldLight,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            val displayName = selectedUpgrade?.let { up ->
+                                val profileName = accounts.find { it.tag == up.accountTag }?.name ?: up.accountTag
+                                "${up.structureName} (Lvl ${up.targetLevel ?: "?"}) [$profileName]"
+                            } ?: "Select Upgrade"
+
+                            OutlinedButton(
+                                onClick = { dropdownExpanded = true },
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(42.dp)
+                                    .border(1.dp, ClashBronze.copy(alpha = 0.4f), RoundedCornerShape(8.dp)),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp)
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        displayName,
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = null,
+                                        tint = ClashGold,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = dropdownExpanded,
+                                onDismissRequest = { dropdownExpanded = false },
+                                modifier = Modifier
+                                    .background(ClashSlate)
+                                    .fillMaxWidth(0.85f)
+                            ) {
+                                ongoingUpgrades.forEach { up ->
+                                    val profileName = accounts.find { it.tag == up.accountTag }?.name ?: up.accountTag
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = "${up.structureName} (Lvl ${up.targetLevel ?: "?"}) [$profileName]",
+                                                color = TextPrimary,
+                                                fontSize = 12.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        },
+                                        onClick = {
+                                            selectedUpgrade = up
+                                            dropdownExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Slider
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Hours to Deduct",
+                                color = ClashGoldLight,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "${hoursSelected.toInt()} Hours",
+                                color = Color(0xFFFF9800),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Slider(
+                            value = hoursSelected,
+                            onValueChange = { hoursSelected = it },
+                            valueRange = 1f..12f,
+                            steps = 10,
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color(0xFFFF9800),
+                                activeTrackColor = Color(0xFFFF9800),
+                                inactiveTrackColor = ClashSlateLight,
+                                activeTickColor = Color.Transparent,
+                                inactiveTickColor = Color.Transparent
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("1h", color = TextSecondary, fontSize = 10.sp)
+                            Text("12h", color = TextSecondary, fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    selectedUpgrade?.let { up ->
+                        onProceed(up.id, hoursSelected.toInt())
+                    }
+                },
+                enabled = selectedUpgrade != null,
+                colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFFF9800))
+            ) {
+                Text("Proceed", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(contentColor = TextSecondary)
+            ) {
+                Text("Cancel")
+            }
+        },
+        containerColor = ClashSlate
+    )
+}
+
+@Composable
+fun HelperHutIcon(
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+
+        // 1. Left chimney pipe
+        val chimneyPath = Path().apply {
+            moveTo(w * 0.22f, h * 0.7f)
+            lineTo(w * 0.22f, h * 0.4f)
+            quadraticTo(w * 0.22f, h * 0.28f, w * 0.28f, h * 0.26f)
+            lineTo(w * 0.32f, h * 0.26f)
+            lineTo(w * 0.32f, h * 0.21f)
+            lineTo(w * 0.26f, h * 0.21f)
+            lineTo(w * 0.26f, h * 0.25f)
+            quadraticTo(w * 0.17f, h * 0.28f, w * 0.17f, h * 0.4f)
+            lineTo(w * 0.17f, h * 0.7f)
+            close()
+        }
+        drawPath(chimneyPath, color = Color(0xFF90A4AE)) // metallic gray chimney
+
+        // 2. Main Wooden Support Poles & Stone Base Blocks
+        // Base blocks
+        drawRect(
+            color = Color(0xFF546E7A),
+            topLeft = Offset(w * 0.25f, h * 0.75f),
+            size = androidx.compose.ui.geometry.Size(w * 0.15f, h * 0.2f)
+        )
+        drawRect(
+            color = Color(0xFF546E7A),
+            topLeft = Offset(w * 0.6f, h * 0.75f),
+            size = androidx.compose.ui.geometry.Size(w * 0.15f, h * 0.2f)
+        )
+
+        // Wooden frame pillars (behind the roof but on base)
+        drawRect(
+            color = Color(0xFF5D4037),
+            topLeft = Offset(w * 0.32f, h * 0.45f),
+            size = androidx.compose.ui.geometry.Size(w * 0.1f, h * 0.35f)
+        )
+        drawRect(
+            color = Color(0xFF5D4037),
+            topLeft = Offset(w * 0.58f, h * 0.45f),
+            size = androidx.compose.ui.geometry.Size(w * 0.1f, h * 0.35f)
+        )
+
+        // Center Hut body wall
+        drawRect(
+            color = Color(0xFFD7CCC8),
+            topLeft = Offset(w * 0.38f, h * 0.5f),
+            size = androidx.compose.ui.geometry.Size(w * 0.24f, h * 0.45f)
+        )
+
+        // 3. Pointed Yellow-Orange Canvas Roof (wizard-hat like)
+        val roofPath = Path().apply {
+            moveTo(w * 0.52f, h * 0.08f)
+            quadraticTo(w * 0.26f, h * 0.25f, w * 0.2f, h * 0.56f)
+            lineTo(w * 0.25f, h * 0.58f)
+            quadraticTo(w * 0.52f, h * 0.4f, w * 0.75f, h * 0.58f)
+            lineTo(w * 0.8f, h * 0.56f)
+            quadraticTo(w * 0.74f, h * 0.25f, w * 0.52f, h * 0.08f)
+            close()
+        }
+        drawPath(roofPath, color = Color(0xFFFFB300)) // Golden orange primary roof
+
+        // Highlight/Stitch details on roof (laces)
+        drawLine(
+            color = Color(0xFFD84315),
+            start = Offset(w * 0.36f, h * 0.25f),
+            end = Offset(w * 0.46f, h * 0.22f),
+            strokeWidth = 1.5.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = Color(0xFFD84315),
+            start = Offset(w * 0.38f, h * 0.31f),
+            end = Offset(w * 0.48f, h * 0.28f),
+            strokeWidth = 1.5.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = Color(0xFFD84315),
+            start = Offset(w * 0.40f, h * 0.37f),
+            end = Offset(w * 0.50f, h * 0.34f),
+            strokeWidth = 1.5.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+
+        // 4. Center Round Window
+        val windowCenter = Offset(w * 0.5f, h * 0.55f)
+        val outerRadius = w * 0.12f
+        val innerRadius = w * 0.08f
+        drawCircle(color = Color(0xFF8D6E63), radius = outerRadius, center = windowCenter) // wood rim
+        drawCircle(color = Color(0xFFBBDEFB), radius = innerRadius, center = windowCenter) // glass blue
+
+        // 5. Door Entrance at bottom with small orange awning roof
+        // Awning roof (orange-red tiles)
+        val awningPath = Path().apply {
+            moveTo(w * 0.4f, h * 0.72f)
+            lineTo(w * 0.5f, h * 0.65f)
+            lineTo(w * 0.6f, h * 0.72f)
+            close()
+        }
+        drawPath(awningPath, color = Color(0xFFFF5722)) // terracotta orange tile rooflet
+
+        // Door frame and glowing dark entrance
+        val doorPath = Path().apply {
+            moveTo(w * 0.44f, h * 0.95f)
+            lineTo(w * 0.44f, h * 0.78f)
+            lineTo(w * 0.5f, h * 0.73f)
+            lineTo(w * 0.56f, h * 0.78f)
+            lineTo(w * 0.56f, h * 0.95f)
+            close()
+        }
+        drawPath(doorPath, color = Color(0xFF3E2723)) // dark brown interior
+
+        // Glow inside door
+        drawRect(
+            color = Color(0xFFFF8F00).copy(alpha = 0.6f),
+            topLeft = Offset(w * 0.46f, h * 0.85f),
+            size = androidx.compose.ui.geometry.Size(w * 0.08f, h * 0.1f)
+        )
+
+        // Left and right support ropes (hanging from roof corner to ground)
+        drawLine(
+            color = Color(0xFFD7CCC8),
+            start = Offset(w * 0.22f, h * 0.57f),
+            end = Offset(w * 0.18f, h * 0.8f),
+            strokeWidth = 1.5.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = Color(0xFFD7CCC8),
+            start = Offset(w * 0.78f, h * 0.57f),
+            end = Offset(w * 0.82f, h * 0.8f),
             strokeWidth = 1.5.dp.toPx(),
             cap = StrokeCap.Round
         )

@@ -335,6 +335,29 @@ class ClashViewModel(
         }
     }
 
+    fun applyHelperBoost(upgradeId: Int, hoursToDeduct: Int) {
+        viewModelScope.launch {
+            val upgrade = upgrades.value.find { it.id == upgradeId } ?: return@launch
+            val secondsToDeduct = hoursToDeduct * 3600L
+            val remainingMs = upgrade.endTime - System.currentTimeMillis()
+            val remainingSeconds = (remainingMs / 1000).coerceAtLeast(0)
+
+            if (remainingSeconds <= secondsToDeduct) {
+                val updated = upgrade.copy(
+                    durationSeconds = upgrade.durationSeconds - remainingSeconds,
+                    isCompleted = true
+                )
+                repository.updateUpgrade(updated)
+            } else {
+                val updated = upgrade.copy(
+                    durationSeconds = upgrade.durationSeconds - secondsToDeduct,
+                    isCompleted = false
+                )
+                repository.updateUpgrade(updated)
+            }
+        }
+    }
+
     class Factory(private val application: Application) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(ClashViewModel::class.java)) {
