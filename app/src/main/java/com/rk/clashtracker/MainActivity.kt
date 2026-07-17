@@ -93,6 +93,7 @@ class MainActivity : ComponentActivity() {
                             containerColor = ClashSlate,
                             modifier = Modifier
                                 .navigationBarsPadding()
+                                .height(54.dp)
                                 .testTag("main_bottom_nav_bar")
                         ) {
                             val items = listOf(Screen.Dashboard, Screen.Upgrades, Screen.Accounts)
@@ -105,14 +106,15 @@ class MainActivity : ComponentActivity() {
                                         Text(
                                             text = screen.title,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                            fontSize = 11.sp
+                                            fontSize = 10.sp
                                         )
                                     },
                                     icon = {
                                         Icon(
                                             imageVector = if (isSelected) screen.selectedIcon else screen.unselectedIcon,
                                             contentDescription = screen.title,
-                                            tint = if (isSelected) ClashGold else TextSecondary
+                                            tint = if (isSelected) ClashGold else TextSecondary,
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     },
                                     colors = NavigationBarItemDefaults.colors(

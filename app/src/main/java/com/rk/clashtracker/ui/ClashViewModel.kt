@@ -79,15 +79,31 @@ class ClashViewModel(
         }
     }
 
-    fun addUpgrade(accountTag: String, structureName: String, targetLevel: Int?, durationSeconds: Long) {
+    fun addUpgrade(
+        accountTag: String,
+        structureName: String,
+        targetLevel: Int?,
+        durationSeconds: Long,
+        villageType: String? = null,
+        categoryType: String? = null
+    ) {
         viewModelScope.launch {
+            val mappingInfo = if (villageType == null || categoryType == null) {
+                JsonParser.getMappingInfoByName(getApplication(), structureName)
+            } else null
+
+            val finalVillage = villageType ?: mappingInfo?.villageType ?: "Town Hall"
+            val finalCategory = categoryType ?: mappingInfo?.categoryType ?: "Building"
+
             val upgrade = UpgradeEntity(
                 accountTag = accountTag,
                 structureName = structureName,
                 targetLevel = targetLevel,
                 startTime = System.currentTimeMillis(),
                 durationSeconds = durationSeconds,
-                isCompleted = false
+                isCompleted = false,
+                villageType = finalVillage,
+                categoryType = finalCategory
             )
             repository.insertUpgrade(upgrade)
         }
@@ -215,19 +231,19 @@ class ClashViewModel(
 
     fun updateUpgradeDetails(id: Int, newName: String, newRemainingTimeStr: String, targetLevel: Int? = null) {
         viewModelScope.launch {
-            val existingList = repository.allUpgrades.stateIn(viewModelScope).value
-            // Since allUpgrades is a flow, let's look through existing items or query
-            // Actually, we can check the upgrades.value state flow:
             val existing = upgrades.value.find { it.id == id }
             if (existing != null) {
                 val hasNewTimer = newRemainingTimeStr.isNotBlank()
                 val seconds = if (hasNewTimer) parseDurationToSeconds(newRemainingTimeStr) else 0L
+                val mappingInfo = JsonParser.getMappingInfoByName(getApplication(), newName.ifEmpty { existing.structureName })
                 val updated = existing.copy(
                     structureName = newName.ifEmpty { existing.structureName },
                     targetLevel = targetLevel,
                     startTime = if (hasNewTimer && seconds > 0) System.currentTimeMillis() else existing.startTime,
                     durationSeconds = if (hasNewTimer && seconds > 0) seconds else existing.durationSeconds,
-                    isCompleted = if (hasNewTimer && seconds <= 0) true else existing.isCompleted
+                    isCompleted = if (hasNewTimer && seconds <= 0) true else existing.isCompleted,
+                    villageType = mappingInfo?.villageType ?: existing.villageType,
+                    categoryType = mappingInfo?.categoryType ?: existing.categoryType
                 )
                 repository.updateUpgrade(updated)
             }
@@ -265,7 +281,9 @@ class ClashViewModel(
                         accountTag = accountTag,
                         structureName = parsed.structureName,
                         targetLevel = parsed.targetLevel,
-                        durationSeconds = seconds
+                        durationSeconds = seconds,
+                        villageType = parsed.villageType,
+                        categoryType = parsed.categoryType
                     )
                 }
             }

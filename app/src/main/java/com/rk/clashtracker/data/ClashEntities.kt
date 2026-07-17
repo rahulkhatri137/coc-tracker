@@ -23,7 +23,9 @@ data class UpgradeEntity(
     val durationSeconds: Long,     // total duration of the upgrade in seconds
     val isCompleted: Boolean = false,
     val notificationTriggered: Boolean = false,
-    val isLiveTracking: Boolean = false
+    val isLiveTracking: Boolean = false,
+    val villageType: String = "Town Hall", // "Town Hall" or "Builder Hall"
+    val categoryType: String = "Building"   // "Building", "Hero", "Pet", "Troop"
 ) {
     val endTime: Long
         get() = startTime + (durationSeconds * 1000)

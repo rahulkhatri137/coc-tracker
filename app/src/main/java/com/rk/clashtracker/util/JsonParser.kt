@@ -11,43 +11,105 @@ object JsonParser {
     data class ExtractedUpgrade(
         val structureName: String,
         val targetLevel: Int? = null,
-        val timeLeftString: String
+        val timeLeftString: String,
+        val villageType: String = "Town Hall",
+        val categoryType: String = "Building"
     )
+
+    data class MappingInfo(
+        val name: String,
+        val villageType: String,
+        val categoryType: String
+    )
+
+    private var cachedDetailedMapping: Map<String, MappingInfo>? = null
+
+    private fun loadDetailedMapping(assetManager: AssetManager): Map<String, MappingInfo> {
+        cachedDetailedMapping?.let { return it }
+        return try {
+            val jsonString = assetManager.open("mapping.json").bufferedReader().use { it.readText() }
+            val root = JSONObject(jsonString)
+            val detailedMap = mutableMapOf<String, MappingInfo>()
+            val keys = root.keys()
+            while (keys.hasNext()) {
+                val groupKey = keys.next()
+                val groupObj = root.optJSONObject(groupKey)
+                if (groupObj != null) {
+                    val (village, category) = when (groupKey) {
+                        "bh_buildings" -> "Builder Hall" to "Building"
+                        "bh_troops" -> "Builder Hall" to "Troop"
+                        "heroes" -> "Town Hall" to "Hero"
+                        "pets" -> "Town Hall" to "Pet"
+                        "th_buildings" -> "Town Hall" to "Building"
+                        "th_troops" -> "Town Hall" to "Troop"
+                        else -> "Town Hall" to "Building"
+                    }
+                    val idKeys = groupObj.keys()
+                    while (idKeys.hasNext()) {
+                        val id = idKeys.next()
+                        val rawName = groupObj.getString(id)
+                        val name = rawName.replace("_", " ")
+                        
+                        // Treat Builder Hall heroes like Battle Machine or Battle Copter as Hero
+                        val finalCategory = if (groupKey == "bh_buildings" && (id == "28000003" || id == "28000005")) {
+                            "Hero"
+                        } else {
+                            category
+                        }
+                        
+                        detailedMap[id] = MappingInfo(name, village, finalCategory)
+                    }
+                }
+            }
+            cachedDetailedMapping = detailedMap
+            detailedMap
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading detailed mapping.json", e)
+            emptyMap()
+        }
+    }
+
+    fun getMappingInfoByName(context: android.content.Context, name: String): MappingInfo? {
+        val detailed = loadDetailedMapping(context.assets)
+        val cleanQuery = name.trim().lowercase()
+        return detailed.values.find { it.name.lowercase() == cleanQuery }
+    }
+
+    fun getMappingInfoById(assetManager: AssetManager, id: String): MappingInfo? {
+        return loadDetailedMapping(assetManager)[id]
+    }
 
     fun parseJsonUpgrades(assetManager: AssetManager, jsonStr: String): List<ExtractedUpgrade> {
         val list = mutableListOf<ExtractedUpgrade>()
         val trimmed = jsonStr.trim()
         if (trimmed.isEmpty()) return list
 
-        // Load mappings from mapping.json
-        val mapping = loadMapping(assetManager)
+        val detailedMap = loadDetailedMapping(assetManager)
 
         try {
             if (trimmed.startsWith("[")) {
                 val array = JSONArray(trimmed)
-                extractFromArr(array, mapping, list)
+                extractFromArr(array, detailedMap, list)
             } else if (trimmed.startsWith("{")) {
                 val obj = JSONObject(trimmed)
-                extractFromObj(obj, mapping, list)
+                extractFromObj(obj, detailedMap, list)
             } else {
-                // Try searching for JSON objects via brace-matching if it starts with arbitrary fields or text
                 val objects = findJsonObjects(trimmed)
                 for (jsonObjStr in objects) {
                     try {
                         val obj = JSONObject(jsonObjStr)
-                        extractFromObj(obj, mapping, list)
+                        extractFromObj(obj, detailedMap, list)
                     } catch (e: Exception) {
                         // ignore
                     }
                 }
             }
         } catch (e: Exception) {
-            // Fallback: brace matching
             val objects = findJsonObjects(trimmed)
             for (jsonObjStr in objects) {
                 try {
                     val obj = JSONObject(jsonObjStr)
-                    extractFromObj(obj, mapping, list)
+                    extractFromObj(obj, detailedMap, list)
                 } catch (ex: Exception) {
                     // ignore
                 }
@@ -56,20 +118,20 @@ object JsonParser {
         return list
     }
 
-    private fun extractFromObj(obj: JSONObject, mapping: Map<String, String>, list: MutableList<ExtractedUpgrade>) {
+    private fun extractFromObj(obj: JSONObject, detailedMap: Map<String, MappingInfo>, list: MutableList<ExtractedUpgrade>) {
         if (obj.has("data") && obj.has("timer")) {
             val dataVal = obj.get("data").toString()
             val timerSeconds = obj.optLong("timer", -1L)
             if (timerSeconds > 0 && dataVal.isNotEmpty()) {
                 val timeLeftStr = formatSecondsToDuration(timerSeconds)
-                val mappedName = mapping[dataVal]
-                val friendlyName = if (mappedName != null && mappedName.isNotBlank()) {
-                    mappedName.replace("_", " ")
-                } else if (mappedName != null && mappedName.isBlank()) {
-                    "Building $dataVal"
+                val mappedInfo = detailedMap[dataVal]
+                val friendlyName = if (mappedInfo != null && mappedInfo.name.isNotBlank()) {
+                    mappedInfo.name
                 } else {
-                    dataVal
+                    "Building $dataVal"
                 }
+                val village = mappedInfo?.villageType ?: "Town Hall"
+                val category = mappedInfo?.categoryType ?: "Building"
                 val lvlVal = if (obj.has("lvl")) {
                     val l = obj.optInt("lvl", -1)
                     if (l != -1) l + 1 else null
@@ -80,7 +142,9 @@ object JsonParser {
                     ExtractedUpgrade(
                         structureName = friendlyName,
                         targetLevel = lvlVal,
-                        timeLeftString = timeLeftStr
+                        timeLeftString = timeLeftStr,
+                        villageType = village,
+                        categoryType = category
                     )
                 )
             }
@@ -91,20 +155,20 @@ object JsonParser {
             val key = keys.next()
             val value = obj.opt(key)
             if (value is JSONObject) {
-                extractFromObj(value, mapping, list)
+                extractFromObj(value, detailedMap, list)
             } else if (value is JSONArray) {
-                extractFromArr(value, mapping, list)
+                extractFromArr(value, detailedMap, list)
             }
         }
     }
 
-    private fun extractFromArr(arr: JSONArray, mapping: Map<String, String>, list: MutableList<ExtractedUpgrade>) {
+    private fun extractFromArr(arr: JSONArray, detailedMap: Map<String, MappingInfo>, list: MutableList<ExtractedUpgrade>) {
         for (i in 0 until arr.length()) {
             val value = arr.opt(i)
             if (value is JSONObject) {
-                extractFromObj(value, mapping, list)
+                extractFromObj(value, detailedMap, list)
             } else if (value is JSONArray) {
-                extractFromArr(value, mapping, list)
+                extractFromArr(value, detailedMap, list)
             }
         }
     }
@@ -114,18 +178,12 @@ object JsonParser {
     private fun loadMapping(assetManager: AssetManager): Map<String, String> {
         cachedMapping?.let { return it }
         return try {
-            val jsonString = assetManager.open("mapping.json").bufferedReader().use { it.readText() }
-            val obj = JSONObject(jsonString)
-            val map = mutableMapOf<String, String>()
-            val keys = obj.keys()
-            while (keys.hasNext()) {
-                val key = keys.next()
-                map[key] = obj.getString(key)
-            }
-            cachedMapping = map
-            map
+            val detailed = loadDetailedMapping(assetManager)
+            val flatMap = detailed.mapValues { it.value.name }
+            cachedMapping = flatMap
+            flatMap
         } catch (e: Exception) {
-            Log.e(TAG, "Error loading mapping.json from assets", e)
+            Log.e(TAG, "Error flattening mapping", e)
             emptyMap()
         }
     }

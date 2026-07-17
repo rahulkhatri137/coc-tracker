@@ -78,32 +78,32 @@ fun UpgradesScreen(
         modifier = modifier
             .fillMaxSize()
             .background(ClashObsidian)
-            .padding(16.dp)
+            .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Text(
                 text = "Upgrade Planner",
                 color = ClashGold,
-                fontSize = 24.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier.padding(bottom = 8.dp)
             )
 
             // Profile Filter
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 16.dp)
+                    .padding(bottom = 8.dp)
             ) {
                 Button(
                     onClick = { showFilterDropdown = true },
                     colors = ButtonDefaults.buttonColors(containerColor = ClashSlate),
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(50.dp)
-                        .border(1.dp, ClashBronze.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                        .height(38.dp)
+                        .border(1.dp, ClashBronze.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
                         .testTag("account_filter_button")
                 ) {
                     Row(
@@ -114,7 +114,7 @@ fun UpgradesScreen(
                         Text(
                             text = if (selectedAccountTag == "All") "Showing: All Profiles" else "Showing Profile: $selectedAccountTag",
                             color = TextPrimary,
-                            fontSize = 14.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = ClashGold)
@@ -152,7 +152,7 @@ fun UpgradesScreen(
                 selectedTabIndex = selectedTab,
                 containerColor = Color.Transparent,
                 contentColor = ClashGold,
-                modifier = Modifier.padding(bottom = 8.dp)
+                modifier = Modifier.padding(bottom = 4.dp)
             ) {
                 Tab(
                     selected = selectedTab == 0,
@@ -165,7 +165,7 @@ fun UpgradesScreen(
                         Text(
                             text = "Ongoing (${ongoingUpgrades.size})",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
+                            fontSize = 12.sp
                         )
                     },
                     selectedContentColor = ClashGold,
@@ -182,7 +182,7 @@ fun UpgradesScreen(
                         Text(
                             text = "Completed (${completedUpgrades.size})",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
+                            fontSize = 12.sp
                         )
                     },
                     selectedContentColor = ClashGold,
@@ -366,7 +366,7 @@ fun UpgradesScreen(
                         )
                     }
                     item {
-                        Spacer(modifier = Modifier.height(100.dp)) // padding for floating actions
+                        Spacer(modifier = Modifier.height(50.dp)) // padding for floating actions
                     }
                 }
             }
@@ -375,7 +375,7 @@ fun UpgradesScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
+                    .padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // Import JSON Button
@@ -390,13 +390,13 @@ fun UpgradesScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = ClashSlateLight),
                     modifier = Modifier
                         .weight(1f)
-                        .height(48.dp)
+                        .height(34.dp)
                         .testTag("import_json_button"),
                     contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Icon(Icons.Default.Code, contentDescription = null, tint = ClashElixir, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Paste JSON", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Icon(Icons.Default.Code, contentDescription = null, tint = ClashElixir, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Paste JSON", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
 
                 // Manual Add Button
@@ -411,13 +411,13 @@ fun UpgradesScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = ClashGold),
                     modifier = Modifier
                         .weight(1f)
-                        .height(48.dp)
+                        .height(34.dp)
                         .testTag("manual_add_button"),
                     contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Manual Add", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.Add, contentDescription = null, tint = Color.Black, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Manual Add", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -545,7 +545,7 @@ fun LiveTimerText(
     Text(
         text = timerText,
         color = if (upgrade.isCompleted) Color(0xFF4CAF50) else ClashGold,
-        fontSize = 14.sp,
+        fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
         fontFamily = FontFamily.Monospace,
         modifier = modifier
@@ -608,13 +608,13 @@ fun UpgradeItem(
         colors = CardDefaults.cardColors(
             containerColor = if (upgrade.isCompleted) ClashSlateLight.copy(alpha = 0.5f) else ClashSlate
         ),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(10.dp),
         modifier = Modifier
             .fillMaxWidth()
             .border(
                 width = 1.dp,
                 color = if (upgrade.isCompleted) Color.Transparent else ClashBronze.copy(alpha = 0.4f),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(10.dp)
             )
             .testTag("upgrade_item_${upgrade.id}")
             .let { modifier ->
@@ -628,7 +628,7 @@ fun UpgradeItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (isSelectionMode) {
@@ -641,7 +641,7 @@ fun UpgradeItem(
                         checkmarkColor = Color.Black
                     ),
                     modifier = Modifier
-                        .padding(end = 12.dp)
+                        .padding(end = 8.dp)
                         .testTag("checkbox_${upgrade.id}")
                 )
             }
@@ -656,30 +656,31 @@ fun UpgradeItem(
                     // Account tag badge
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(RoundedCornerShape(4.dp))
                             .background(ClashWood)
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
                             text = accountName,
                             color = ClashGoldLight,
-                            fontSize = 11.sp,
+                            fontSize = 9.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
 
                     if (!isSelectionMode) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                             // Manual Live Tracking Notification Toggle (if active)
                             if (!upgrade.isCompleted) {
                                 IconButton(
                                     onClick = onToggleLiveTracking,
-                                    modifier = Modifier.testTag("live_tracking_btn_${upgrade.id}")
+                                    modifier = Modifier.size(26.dp).testTag("live_tracking_btn_${upgrade.id}")
                                 ) {
                                     Icon(
                                         imageVector = if (upgrade.isLiveTracking) Icons.Default.NotificationsActive else Icons.Default.NotificationsNone,
                                         contentDescription = "Live Notification Progress Tracker",
-                                        tint = if (upgrade.isLiveTracking) ClashGold else TextSecondary
+                                        tint = if (upgrade.isLiveTracking) ClashGold else TextSecondary,
+                                        modifier = Modifier.size(14.dp)
                                     )
                                 }
                             }
@@ -687,55 +688,110 @@ fun UpgradeItem(
                             // Edit button
                             IconButton(
                                 onClick = { showEditDialog = true },
-                                modifier = Modifier.testTag("edit_upgrade_btn_${upgrade.id}")
+                                modifier = Modifier.size(26.dp).testTag("edit_upgrade_btn_${upgrade.id}")
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Edit,
                                     contentDescription = "Edit Upgrade",
-                                    tint = ClashGoldLight
+                                    tint = ClashGoldLight,
+                                    modifier = Modifier.size(14.dp)
                                 )
                             }
 
                             // Quick Complete Switch/Button
                             IconButton(
                                 onClick = onToggleComplete,
-                                modifier = Modifier.testTag("complete_toggle_btn_${upgrade.id}")
+                                modifier = Modifier.size(26.dp).testTag("complete_toggle_btn_${upgrade.id}")
                             ) {
                                 Icon(
                                     imageVector = if (upgrade.isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
                                     contentDescription = "Complete Toggle",
-                                    tint = if (upgrade.isCompleted) Color(0xFF4CAF50) else TextSecondary
+                                    tint = if (upgrade.isCompleted) Color(0xFF4CAF50) else TextSecondary,
+                                    modifier = Modifier.size(14.dp)
                                 )
                             }
 
                             // Delete button
                             IconButton(
                                 onClick = onDelete,
-                                modifier = Modifier.testTag("delete_upgrade_btn_${upgrade.id}")
+                                modifier = Modifier.size(26.dp).testTag("delete_upgrade_btn_${upgrade.id}")
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Delete,
                                     contentDescription = "Delete",
-                                    tint = Color(0xFFEF5350).copy(alpha = 0.8f)
+                                    tint = Color(0xFFEF5350).copy(alpha = 0.8f),
+                                    modifier = Modifier.size(14.dp)
                                 )
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
                 // Body: Structure name & target level
                 val levelText = if (upgrade.targetLevel != null && upgrade.targetLevel > 0) " (Lvl ${upgrade.targetLevel})" else ""
                 Text(
                     text = "${upgrade.structureName}$levelText",
                     color = if (upgrade.isCompleted) TextSecondary else TextPrimary,
-                    fontSize = 18.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleMedium
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
+                ) {
+                    // Village Tag (Town Hall or Builder Hall)
+                    val isTh = upgrade.villageType == "Town Hall"
+                    val villageBg = if (isTh) Color(0xFF1E3A8A).copy(alpha = 0.25f) else Color(0xFF065F46).copy(alpha = 0.25f)
+                    val villageTextCol = if (isTh) Color(0xFF93C5FD) else Color(0xFF6EE7B7)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(villageBg)
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = upgrade.villageType,
+                            color = villageTextCol,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // Category Tag (Building, Hero, Pet, Troop)
+                    val categoryBg = when (upgrade.categoryType) {
+                        "Building" -> Color(0xFF78350F).copy(alpha = 0.25f)
+                        "Hero" -> Color(0xFF6B21A8).copy(alpha = 0.25f)
+                        "Pet" -> Color(0xFF3730A3).copy(alpha = 0.25f)
+                        "Troop" -> Color(0xFF831843).copy(alpha = 0.25f)
+                        else -> Color(0xFF4B5563).copy(alpha = 0.25f)
+                    }
+                    val categoryTextCol = when (upgrade.categoryType) {
+                        "Building" -> Color(0xFFFDE68A)
+                        "Hero" -> Color(0xFFE9D5FF)
+                        "Pet" -> Color(0xFFC7D2FE)
+                        "Troop" -> Color(0xFFFBCFE8)
+                        else -> Color(0xFFD1D5DB)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(categoryBg)
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = upgrade.categoryType,
+                            color = categoryTextCol,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -745,14 +801,14 @@ fun UpgradeItem(
                     Text(
                         text = if (upgrade.isCompleted) "Status" else "Time Left",
                         color = TextSecondary,
-                        fontSize = 13.sp
+                        fontSize = 11.sp
                     )
                     LiveTimerText(upgrade = upgrade)
                 }
 
                 // Material 3 Live Progress Indicator (if active)
                 if (!upgrade.isCompleted) {
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     LiveProgressBar(upgrade = upgrade)
                 }
             }
